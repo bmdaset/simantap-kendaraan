@@ -55,7 +55,6 @@ if df is not None:
     df = df[~df[kolom_no].astype(str).str.lower().str.contains('jumlah|total|no', na=False)]
     df = df.reset_index(drop=True)
 
-    # Fungsi untuk mendeteksi kategori kendaraan per baris
     def deteksi_kategori(row):
         text = " ".join(row.fillna("").astype(str)).lower()
         if "sepeda motor" in text or "motor" in text or "trail" in text:
@@ -124,35 +123,37 @@ if df is not None:
     st.markdown("---")
     st.markdown("### 📊 Rekap Rinci Jumlah Kendaraan per SKPD")
     
-    kolom_skpd_candidates = ['SKPD', 'Unit Kerja', 'OPD', 'Nama SKPD', 'Satuan Kerja']
-    kolom_skpd = next((col for col in kolom_skpd_candidates if col in df.columns), None)
-    
-    if not kolom_skpd and len(df.columns) > 1:
-        kolom_skpd = df.columns[1]
+    # Pilihan kolom manual untuk memastikan nama SKPD yang tampil benar
+    all_columns = list(df.columns)
+    default_idx = 0
+    for i, col in enumerate(all_columns):
+        col_lower = str(col).lower()
+        if any(k in col_lower for k in ['skpd', 'unit', 'opd', 'nama', 'satuan', 'dinas']):
+            default_idx = i
+            break
 
-    if kolom_skpd:
-        # Membuat tabel pivot agar rekap memuat kolom rincian per kategori
+    selected_skpd_col = st.selectbox("Pilih Kolom untuk Nama SKPD:", all_columns, index=default_idx)
+
+    if selected_skpd_col:
         rekap_skpd = pd.pivot_table(
             df,
-            index=kolom_skpd,
+            index=selected_skpd_col,
             columns='Kategori_Jenis',
             values=kolom_no,
             aggfunc='count',
             fill_value=0
         ).reset_index()
 
-        # Memastikan kolom kategori wajib selalu ada walau nilainya 0
         for kat in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya']:
             if kat not in rekap_skpd.columns:
                 rekap_skpd[kat] = 0
 
-        # Mengatur urutan kolom agar lebih rapi dan menambahkan kolom Total
         kolom_tersedia = [c for c in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya'] if c in rekap_skpd.columns]
         rekap_skpd['Total'] = rekap_skpd[kolom_tersedia].sum(axis=1)
         rekap_skpd = rekap_skpd.sort_values(by='Total', ascending=False).reset_index(drop=True)
 
         st.table(rekap_skpd)
     else:
-        st.warning("Kolom SKPD tidak terdeteksi otomatis di file Excel.")
+        st.warning("Silakan pilih kolom SKPD yang sesuai.")
 else:
     st.error("File Excel 'REKAP KENDARAAN TA. 2026.YP.xlsx' tidak ditemukan di repositori.")
