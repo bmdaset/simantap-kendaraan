@@ -57,11 +57,11 @@ if df is not None:
 
     def deteksi_kategori(row):
         text = " ".join(row.fillna("").astype(str)).lower()
-        if "sepeda motor" in text or "motor" in text or "trail" in text:
-            return "Sepeda Motor"
-        elif "pick up" in text or "pickup" in text:
+        if "pick up" in text or "pickup" in text or "bak terbuka" in text:
             return "Pick Up"
-        elif "mobil" in text or "minibus" in text or "jeep" in text or "station wagon" in text or "sedan" in text:
+        elif "sepeda motor" in text or "motor" in text or "trail" in text or "matic" in text or "klx" in text or "crf" in text or "bebek" in text or "roda dua" in text:
+            return "Sepeda Motor"
+        elif "mobil" in text or "minibus" in text or "station wagon" in text or "stationwagon" in text or "jeep" in text or "sedan" in text or "bus" in text or "truk" in text or "truck" in text or "doka" in text or "double cabin" in text or "suv" in text or "mpv" in text:
             return "Mobil"
         else:
             return "Lainnya"
@@ -123,15 +123,27 @@ if df is not None:
     st.markdown("---")
     st.markdown("### 📊 Rekap Rinci Jumlah Kendaraan per SKPD")
     
-    # Memuat seluruh kolom agar pilihan dropdown tidak kosong
     all_columns = [col for col in df.columns if col not in ['Kategori_Jenis', 'Harga_Clean']]
     
+    # Deteksi cerdas: Mencari kolom yang barisnya paling banyak mengandung nama instansi/SKPD
     default_idx = 0
+    max_score = -1
     for i, col in enumerate(all_columns):
+        score = 0
         col_lower = str(col).lower()
-        if any(k in col_lower for k in ['skpd', 'unit', 'opd', 'nama', 'satuan', 'dinas', 'keterangan']):
+        if any(k in col_lower for k in ['skpd', 'unit', 'opd', 'nama', 'satuan', 'dinas']):
+            score += 5
+        
+        try:
+            sample_text = df[col].dropna().astype(str).str.lower().str.cat(sep=" ")
+            if any(kw in sample_text for kw in ['dinas', 'badan', 'sekretariat', 'inspektorat', 'kecamatan']):
+                score += 20 # Skor tinggi jika isinya benar-benar nama instansi
+        except:
+            pass
+
+        if score > max_score:
+            max_score = score
             default_idx = i
-            break
 
     selected_skpd_col = st.selectbox("Pilih Kolom untuk Nama SKPD:", all_columns, index=min(default_idx, len(all_columns)-1))
 
