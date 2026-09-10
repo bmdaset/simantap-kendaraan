@@ -42,19 +42,7 @@ def load_data():
 df, file_path = load_data()
 
 if df is not None:
-    # Deteksi otomatis kolom SKPD di latar belakang tanpa menampilkan 'Unnamed'
-    skpd_col = None
-    for col in df.columns:
-        try:
-            sample_text = df[col].dropna().astype(str).str.lower().str.cat(sep=" ")
-            if any(kw in sample_text for kw in ['dinas', 'badan', 'sekretariat', 'inspektorat', 'kecamatan', 'rsud', 'pemerintah']):
-                skpd_col = col
-                break
-        except:
-            pass
-    if not skpd_col:
-        skpd_col = df.columns[1]
-
+    # Cari kolom nomor atau ID
     kolom_no = None
     for col in df.columns:
         if 'no' in str(col).lower():
@@ -68,14 +56,38 @@ if df is not None:
     df = df[~df[kolom_no].astype(str).str.lower().str.contains('jumlah|total|no', na=False)]
     df = df.reset_index(drop=True)
 
-    # Deteksi kategori yang akurat dan pas 215 untuk sepeda motor
+    # Deteksi otomatis kolom SKPD
+    skpd_col = None
+    for col in df.columns:
+        col_str = str(col).lower()
+        if any(k in col_str for k in ['skpd', 'unit', 'opd', 'dinas', 'instansi']):
+            skpd_col = col
+            break
+
+    if not skpd_col:
+        for col in df.columns:
+            try:
+                sample_text = df[col].dropna().astype(str).str.lower().str.cat(sep=" ")
+                if any(kw in sample_text for kw in ['dinas', 'badan', 'sekretariat', 'inspektorat', 'kecamatan', 'rsud']):
+                    skpd_col = col
+                    break
+            except:
+                pass
+
+    if not skpd_col:
+        if len(df.columns) > 18:
+            skpd_col = df.columns[18]
+        else:
+            skpd_col = df.columns[min(1, len(df.columns)-1)]
+
+    # Deteksi Kategori Kendaraan yang akurat
     def deteksi_kategori(row):
         text = " ".join(row.fillna("").astype(str)).lower()
         if "pick up" in text or "pickup" in text or "bak terbuka" in text:
             return "Pick Up"
         elif "sepeda motor" in text or "roda dua" in text or "trail" in text or "matic" in text or "klx" in text or "crf" in text or "bebek" in text or "scoopy" in text or "beat" in text or "vario" in text or "mio" in text:
             return "Sepeda Motor"
-        elif "mobil" in text or "minibus" in text or "station wagon" in text or "stationwagon" in text or "jeep" in text or "sedan" in text or "bus" in text or "truk" in text or "truck" in text or "doka" in text or "double cabin" in text or "suv" in text or "mpv" in text:
+        elif "mobil" in text or "minibus" in text or "station wagon" in text or "stationwagon" in text or "jeep" in text or "sedan" in text or "bus" in text or "truk" in text or "truck" in text or "doka" in text or "double cabin" in text or "suv" in text or "mpv" in text or "pemadam" in text:
             return "Mobil"
         else:
             return "Lainnya"
@@ -137,8 +149,8 @@ if df is not None:
     st.markdown("### 📊 Rekap Rinci Jumlah Kendaraan per SKPD")
 
     try:
-        df_rekap = df.dropna(subset=[skpd_col]).copy()
-        df_rekap[skpd_col] = df_rekap[skpd_col].astype(str).str.strip()
+        df_rekap = df.copy()
+        df_rekap[skpd_col] = df_rekap[skpd_col].fillna("").astype(str).str.strip()
         df_rekap = df_rekap[df_rekap[skpd_col] != '']
 
         rekap_skpd = pd.pivot_table(
@@ -157,16 +169,18 @@ if df is not None:
         kolom_tersedia = [c for c in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya'] if c in rekap_skpd.columns]
         rekap_skpd['Total'] = rekap_skpd[kolom_tersedia].sum(axis=1)
         rekap_skpd = rekap_skpd.sort_values(by='Total', ascending=False).reset_index(drop=True)
+        
+        # Ubah nama kolom agar rapi
+        rekap_skpd = rekap_skpd.rename(columns={skpd_col: "NAMA SKPD / UNIT KERJA"})
 
-        # Filter spesifik nama SKPD jika ingin mencari instansi tertentu langsung
-        daftar_skpd = ["Semua SKPD"] + list(rekap_skpd[skpd_col].unique())
-        pilih_skpd = st.selectbox("🔍 Filter Berdasarkan Nama SKPD Tertentu:", daftar_skpd)
+        daftar_skpd = ["Semua SKPD"] + list(rekap_skpd["NAMA SKPD / UNIT KERJA"].unique())
+        pilih_skpd = st.selectbox("🔍 Pilih Nama SKPD untuk Ditampilkan:", daftar_skpd)
 
         if pilih_skpd != "Semua SKPD":
-            rekap_skpd = rekap_skpd[rekap_skpd[skpd_col] == pilih_skpd]
+            rekap_skpd = rekap_skpd[rekap_skpd["NAMA SKPD / UNIT KERJA"] == pilih_skpd]
 
         st.table(rekap_skpd)
     except Exception as e:
-        st.warning("Gagal memuat rekap data SKPD. Pastikan format file Excel sesuai.")
+        st.error(f"Terjadi kesalahan saat memuat rekap: {e}")
 else:
     st.error("File Excel 'REKAP KENDARAAN TA. 2026.YP.xlsx' tidak ditemukan.")
