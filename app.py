@@ -65,73 +65,32 @@ def load_data():
 
     temp_df = temp_df.dropna(how="all").reset_index(drop=True)
 
-    if len(temp_df.columns) >= len(kolom_kib_b):
-      temp_df.columns = kolom_kib_b[: len(kolom_kib_b)] + [
-          f"Kolom {i+1}"
-          for i in range(len(kolom_kib_b), len(temp_df.columns))
-      ]
-    else:
-      temp_df.columns = kolom_kib_b[: len(temp_df.columns)]
+    # Penamaan Kolom Standar KIB B dan Kolom 18 untuk SKPD
+    num_cols = len(temp_df.columns)
+    col_names = kolom_kib_b.copy()
 
-    # Pemetaan Nama SKPD per baris berdasarkan header judul instansi di dalam file Excel
-    current_skpd = "DINAS / INSTANSI LAINNYA"
-    skpd_list = []
+    if num_cols > len(col_names):
+      for i in range(len(col_names), num_cols):
+        if i == 17:  # Kolom ke-18 (indeks 17)
+          col_names.append("SKPD_Nama_Col")
+        else:
+          col_names.append(f"Kolom_{i+1}")
 
-    for idx, row in temp_df.iterrows():
-      row_str = " ".join(row.fillna("").astype(str)).lower()
-      no_val = str(row.iloc[0]).strip()
+    temp_df.columns = col_names[:num_cols]
 
-      is_skpd_header = any(
-          k in row_str
-          for k in [
-              "dinas",
-              "badan",
-              "kecamatan",
-              "sekretariat",
-              "rsud",
-              "bagian",
-              "kantor",
-              "upt",
-              "sekolah",
-              "puskesmas",
-              "pemerintah",
-          ]
-      ) and (
-          no_val == ""
-          or no_val.lower() == "nan"
-          or not any(char.isdigit() for char in no_val)
+    # Mengambil Nama SKPD secara mutlak dari Kolom 18 (indeks 17) jika tersedia
+    if "SKPD_Nama_Col" in temp_df.columns:
+      temp_df["SKPD_Nama"] = (
+          temp_df["SKPD_Nama_Col"].fillna("DINAS / INSTANSI LAINNYA").astype(str).str.upper().str.strip()
       )
+    else:
+      temp_df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-      if is_skpd_header:
-        for val in row:
-          val_str = str(val).strip()
-          if any(
-              k in val_str.lower()
-              for k in [
-                  "dinas",
-                  "badan",
-                  "kecamatan",
-                  "sekretariat",
-                  "rsud",
-                  "bagian",
-                  "kantor",
-                  "upt",
-                  "sekolah",
-                  "puskesmas",
-                  "pemerintah",
-              ]
-          ):
-            current_skpd = val_str.upper()
-            break
-
-      skpd_list.append(current_skpd)
-
-    temp_df["SKPD_Nama"] = skpd_list
-
-    # Memastikan jumlah baris data sama persis dengan baris data valid di Excel (berdasarkan kolom No.)
+    # Filter baris data valid berdasarkan nomor urut / No.
     df = temp_df[temp_df["No."].astype(str).str.contains(r"\d", na=False)].copy()
     df = df.reset_index(drop=True)
 
+    # Pembersihan Harga
     if "Harga (Rp)" in df.columns:
       df["Harga_Clean"] = (
           df["Harga (Rp)"]
@@ -147,7 +106,7 @@ def load_data():
     else:
       df["Harga_Clean"] = 0
 
-    # Klasifikasi Kategori Presisi (Station Wagon & Minibus aman masuk Mobil)
+    # Klasifikasi Kategori Kendaraan Presisi
     def deteksi_kategori(row):
       text = str(row.get("Jenis / Nama Barang", "")).lower()
       merk = str(row.get("Merk / Type", "")).lower()
@@ -311,13 +270,13 @@ elif st.session_state.page == "table":
   else:
     filtered_df = df[df["Kategori_Jenis"] == keyword]
 
-  # Filter per Nama SKPD di dalam halaman tabel agar rincian per instansi akurat
+  # Filter per Nama SKPD dari Kolom 18 di dalam halaman tabel
   if not filtered_df.empty:
     skpd_list = ["Semua SKPD"] + sorted(
         list(filtered_df["SKPD_Nama"].dropna().unique())
     )
     pilih_skpd = st.selectbox(
-        "🏢 Filter Berdasarkan Nama SKPD / Dinas:", skpd_list
+        "🏢 Filter Berdasarkan Nama SKPD / Dinas (Kolom 18):", skpd_list
     )
     if pilih_skpd != "Semua SKPD":
       filtered_df = filtered_df[filtered_df["SKPD_Nama"] == pilih_skpd]
@@ -342,8 +301,9 @@ elif st.session_state.page == "table":
       f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
   )
 
+  drop_cols = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama_Col"]
   display_df = filtered_df.drop(
-      columns=["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"], errors="ignore"
+      columns=[c for c in drop_cols if c in filtered_df.columns], errors="ignore"
   ).reset_index(drop=True)
   st.dataframe(display_df, use_container_width=True, height=400)
 
