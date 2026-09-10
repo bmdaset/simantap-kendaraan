@@ -72,30 +72,26 @@ if df is not None:
     df = df[~df[kolom_no].astype(str).str.lower().str.contains('jumlah|total|no', na=False)]
     df = df.reset_index(drop=True)
 
-    # Deteksi Kolom SKPD yang Akurat (Menghindari kolom jenis kendaraan)
+    # Deteksi Kolom SKPD yang Akurat (Mencari teks nama instansi)
     skpd_col = None
-    max_score = -1
     for col in df.columns:
-        try:
-            col_series = df[col].dropna().astype(str).str.lower()
-            sample_str = " ".join(col_series.head(20))
-            
-            # Pastikan bukan kolom jenis/deskripsi kendaraan
-            if any(v in sample_str for v in ['sepeda motor', 'minibus', 'pick up', 'truk', 'cc ']):
-                continue
-            
-            score = col_series.str.contains('dinas |badan |sekretariat |kecamatan |rsud |inspektorat |biro |satpol |pemerintah', regex=True, na=False).sum()
-            if score > max_score:
-                max_score = score
-                skpd_col = col
-        except:
-            pass
+        c_lower = str(col).lower()
+        if any(k in c_lower for k in ['skpd', 'unit kerja', 'opd', 'instansi', 'dinas']):
+            skpd_col = col
+            break
 
     if not skpd_col:
+        max_matches = 0
         for col in df.columns:
-            if any(k in str(col).lower() for k in ['skpd', 'unit', 'opd', 'dinas', 'instansi', 'pemilik']):
-                skpd_col = col
-                break
+            try:
+                val_str = df[col].dropna().astype(str).str.lower()
+                matches = val_str.str.contains('dinas|badan|sekretariat|kecamatan|rsud|inspektorat|biro|satpol|pemerintah|upt', case=False, regex=True).sum()
+                if matches > max_matches:
+                    max_matches = matches
+                    skpd_col = col
+            except:
+                pass
+
     if not skpd_col:
         skpd_col = df.columns[min(2, len(df.columns)-1)]
 
