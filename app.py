@@ -123,8 +123,8 @@ if df is not None:
     st.markdown("---")
     st.markdown("### 📊 Rekap Rinci Jumlah Kendaraan per SKPD")
     
-    # Hanya ambil kolom asli dari Excel (buang kolom helper seperti Kategori_Jenis dan kolom Unnamed)
-    all_columns = [col for col in df.columns if col not in ['Kategori_Jenis', 'Harga_Clean'] and not str(col).startswith('Unnamed')]
+    # Memuat seluruh kolom agar pilihan dropdown tidak kosong
+    all_columns = [col for col in df.columns if col not in ['Kategori_Jenis', 'Harga_Clean']]
     
     default_idx = 0
     for i, col in enumerate(all_columns):
@@ -133,7 +133,7 @@ if df is not None:
             default_idx = i
             break
 
-    selected_skpd_col = st.selectbox("Pilih Kolom untuk Nama SKPD:", all_columns, index=default_idx)
+    selected_skpd_col = st.selectbox("Pilih Kolom untuk Nama SKPD:", all_columns, index=min(default_idx, len(all_columns)-1))
 
     if selected_skpd_col:
         try:
