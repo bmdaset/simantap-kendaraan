@@ -112,14 +112,33 @@ def load_data():
     else:
       temp_df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-    # Filter baris data valid berdasarkan nomor urut / No.
-    df = temp_df[temp_df["No."].astype(str).str.contains(r"\d", na=False)].copy()
+    # --- PENYESUAIAN FILTER AGAR SEMUA 1603 DATA MASUK SECARA AKURAT ---
+    # Memastikan baris yang diambil adalah baris yang memiliki Merk/Type atau Jenis Barang,
+    # sehingga tidak ada data bernomor urut kosong/khusus yang terlewat.
+    if "Jenis / Nama Barang" in temp_df.columns and "Merk / Type" in temp_df.columns:
+      df = temp_df[
+          temp_df["Jenis / Nama Barang"].notna()
+          | temp_df["Merk / Type"].notna()
+      ].copy()
+    else:
+      df = temp_df.copy()
+
     df = df.reset_index(drop=True)
 
-    # Pembersihan Harga
-    if "Harga (Rp)" in df.columns:
+    # --- PENCARIAN & PEMBERSIHAN KOLOM HARGA YANG AKURAT ---
+    harga_col_name = None
+    for col in df.columns:
+      c_lower = str(col).lower()
+      if "harga" in c_lower or "rupiah" in c_lower or "jml" in c_lower:
+        harga_col_name = col
+        break
+
+    if harga_col_name is None and len(df.columns) >= 16:
+      harga_col_name = df.columns[15]
+
+    if harga_col_name:
       df["Harga_Clean"] = (
-          df["Harga (Rp)"]
+          df[harga_col_name]
           .astype(str)
           .str.replace("Rp", "", case=False)
           .str.replace(".", "", regex=False)
