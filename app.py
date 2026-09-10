@@ -42,6 +42,19 @@ def load_data():
 df, file_path = load_data()
 
 if df is not None:
+    # Otomatis ubah nama kolom 'Unnamed' yang berisi teks SKPD agar langsung terbaca rapi
+    rename_dict = {}
+    for col in df.columns:
+        if "unnamed" in str(col).lower():
+            try:
+                sample_val = str(df[col].dropna().iloc[0]).lower()
+                if any(k in sample_val for k in ['dinas', 'badan', 'sekretariat', 'inspektorat', 'kecamatan', 'rsud']):
+                    rename_dict[col] = "SKPD / Unit Kerja"
+            except:
+                pass
+    if rename_dict:
+        df = df.rename(columns=rename_dict)
+
     kolom_no = None
     for col in df.columns:
         if 'no' in str(col).lower():
@@ -55,11 +68,13 @@ if df is not None:
     df = df[~df[kolom_no].astype(str).str.lower().str.contains('jumlah|total|no', na=False)]
     df = df.reset_index(drop=True)
 
+    # Deteksi kategori yang lebih spesifik agar jumlah klop dengan Excel
     def deteksi_kategori(row):
         text = " ".join(row.fillna("").astype(str)).lower()
+        
         if "pick up" in text or "pickup" in text or "bak terbuka" in text:
             return "Pick Up"
-        elif "sepeda motor" in text or "motor" in text or "trail" in text or "matic" in text or "klx" in text or "crf" in text or "bebek" in text or "roda dua" in text:
+        elif "sepeda motor" in text or "roda dua" in text or "trail" in text or "matic" in text or "klx" in text or "crf" in text or "bebek" in text or "scoopy" in text or "beat" in text or "vario" in text or "mio" in text:
             return "Sepeda Motor"
         elif "mobil" in text or "minibus" in text or "station wagon" in text or "stationwagon" in text or "jeep" in text or "sedan" in text or "bus" in text or "truk" in text or "truck" in text or "doka" in text or "double cabin" in text or "suv" in text or "mpv" in text:
             return "Mobil"
@@ -125,25 +140,11 @@ if df is not None:
     
     all_columns = [col for col in df.columns if col not in ['Kategori_Jenis', 'Harga_Clean']]
     
-    # Deteksi cerdas: Mencari kolom yang barisnya paling banyak mengandung nama instansi/SKPD
     default_idx = 0
-    max_score = -1
     for i, col in enumerate(all_columns):
-        score = 0
-        col_lower = str(col).lower()
-        if any(k in col_lower for k in ['skpd', 'unit', 'opd', 'nama', 'satuan', 'dinas']):
-            score += 5
-        
-        try:
-            sample_text = df[col].dropna().astype(str).str.lower().str.cat(sep=" ")
-            if any(kw in sample_text for kw in ['dinas', 'badan', 'sekretariat', 'inspektorat', 'kecamatan']):
-                score += 20 # Skor tinggi jika isinya benar-benar nama instansi
-        except:
-            pass
-
-        if score > max_score:
-            max_score = score
+        if str(col).lower() == "skpd / unit kerja" or 'skpd' in str(col).lower():
             default_idx = i
+            break
 
     selected_skpd_col = st.selectbox("Pilih Kolom untuk Nama SKPD:", all_columns, index=min(default_idx, len(all_columns)-1))
 
