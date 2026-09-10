@@ -16,8 +16,13 @@ st.markdown("""
         border-radius: 8px;
         font-weight: bold;
         padding: 10px;
-        color: white;
-        border: none;
+        background-color: #f0f2f6;
+        color: #1f1f1f;
+        border: 1px solid #d6d6d6;
+    }
+    .stButton>button:hover {
+        background-color: #e0e2e6;
+        border-color: #b6b6b6;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -37,7 +42,6 @@ def load_data():
         else:
             return None, None
     
-    # Deteksi baris header secara otomatis untuk menghilangkan 'Unnamed'
     df_raw = pd.read_excel(file_path, header=None)
     header_row = 0
     for idx, row in df_raw.head(15).iterrows():
@@ -52,13 +56,9 @@ def load_data():
 df, file_path = load_data()
 
 if df is not None:
-    # Bersihkan nama kolom dari spasi berlebih
     df.columns = [str(c).strip() for c in df.columns]
-    
-    # Hapus kolom kosong atau yang bernama Unnamed
     df = df.loc[:, ~df.columns.str.contains('^Unnamed', na=False)]
 
-    # Cari kolom nomor
     kolom_no = None
     for col in df.columns:
         if 'no' in str(col).lower() and len(str(col)) < 10:
@@ -72,26 +72,33 @@ if df is not None:
     df = df[~df[kolom_no].astype(str).str.lower().str.contains('jumlah|total|no', na=False)]
     df = df.reset_index(drop=True)
 
-    # Cari kolom SKPD secara akurat
+    # Deteksi Kolom SKPD yang Akurat (Menghindari kolom jenis kendaraan)
     skpd_col = None
+    max_score = -1
     for col in df.columns:
-        col_lower = str(col).lower()
-        if any(k in col_lower for k in ['skpd', 'unit', 'opd', 'dinas', 'instansi']):
-            skpd_col = col
-            break
+        try:
+            col_series = df[col].dropna().astype(str).str.lower()
+            sample_str = " ".join(col_series.head(20))
+            
+            # Pastikan bukan kolom jenis/deskripsi kendaraan
+            if any(v in sample_str for v in ['sepeda motor', 'minibus', 'pick up', 'truk', 'cc ']):
+                continue
+            
+            score = col_series.str.contains('dinas |badan |sekretariat |kecamatan |rsud |inspektorat |biro |satpol |pemerintah', regex=True, na=False).sum()
+            if score > max_score:
+                max_score = score
+                skpd_col = col
+        except:
+            pass
+
     if not skpd_col:
         for col in df.columns:
-            try:
-                sample_text = " ".join(df[col].dropna().astype(str).str.lower().head(10))
-                if any(kw in sample_text for kw in ['dinas', 'badan', 'sekretariat', 'kecamatan', 'rsud', 'pemerintah']):
-                    skpd_col = col
-                    break
-            except:
-                pass
+            if any(k in str(col).lower() for k in ['skpd', 'unit', 'opd', 'dinas', 'instansi', 'pemilik']):
+                skpd_col = col
+                break
     if not skpd_col:
         skpd_col = df.columns[min(2, len(df.columns)-1)]
 
-    # Kategori Kendaraan
     def deteksi_kategori(row):
         text = " ".join(row.fillna("").astype(str)).lower()
         if "pick up" in text or "pickup" in text or "bak terbuka" in text:
@@ -110,11 +117,9 @@ if df is not None:
     t_mobil = len(df[df['Kategori_Jenis'] == "Mobil"])
     t_pickup = len(df[df['Kategori_Jenis'] == "Pick Up"])
 
-    # Header Kompak & Berwarna
     st.markdown("<h3 style='margin-bottom: 0px;'>🚗 SIMANTAP - Kendaraan Dinas</h3>", unsafe_allow_html=True)
     st.markdown("<p style='color: gray; font-size: 13px; margin-bottom: 15px;'>Sistem Informasi Manajemen Aset & Kendaraan Dinas</p>", unsafe_allow_html=True)
 
-    # Tombol Filter Kategori Berwarna & Sebaris (Hemat Tempat)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button(f"🔴 Semua Data\n({t_semua})", key="b_semua"):
@@ -139,7 +144,6 @@ if df is not None:
 
     st.markdown("---")
 
-    # Layout Menggunakan Tab agar Bersih dan Tidak Panjang Ke Bawah
     tab1, tab2 = st.tabs(["📋 Tabel Data Kendaraan", "📊 Rekap Rinci per SKPD"])
 
     with tab1:
