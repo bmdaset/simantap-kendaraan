@@ -65,23 +65,22 @@ def load_data():
 
     temp_df = temp_df.dropna(how="all").reset_index(drop=True)
 
-    # Penamaan Kolom Standar KIB B dan Kolom 18 untuk SKPD
+    # Penamaan Kolom Standar
     num_cols = len(temp_df.columns)
     col_names = kolom_kib_b.copy()
-
-    if num_cols > len(col_names):
-      for i in range(len(col_names), num_cols):
-        if i == 17:  # Kolom ke-18 (indeks 17)
-          col_names.append("SKPD_Nama_Col")
-        else:
-          col_names.append(f"Kolom_{i+1}")
-
+    for i in range(len(col_names), num_cols):
+      col_names.append(f"Kolom_{i+1}")
     temp_df.columns = col_names[:num_cols]
 
-    # Mengambil Nama SKPD secara mutlak dari Kolom 18 (indeks 17) jika tersedia
-    if "SKPD_Nama_Col" in temp_df.columns:
+    # Mengambil Nama SKPD mutlak dari Kolom 19 (Indeks ke-18 dalam Python)
+    if num_cols >= 19:
+      skpd_col_name = temp_df.columns[18]
       temp_df["SKPD_Nama"] = (
-          temp_df["SKPD_Nama_Col"].fillna("DINAS / INSTANSI LAINNYA").astype(str).str.upper().str.strip()
+          temp_df[skpd_col_name]
+          .fillna("DINAS / INSTANSI LAINNYA")
+          .astype(str)
+          .str.upper()
+          .str.strip()
       )
     else:
       temp_df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
@@ -251,6 +250,48 @@ if st.session_state.page == "menu":
       st.session_state.page = "table"
       st.rerun()
 
+  # Bagian Preview Rekapitulasi Rincian Berdasarkan Kolom 19 (Per Nama SKPD)
+  st.markdown("---")
+  st.markdown(
+      "#### 📊 Preview Jumlah Kendaraan per Nama SKPD (Berdasarkan Kolom 19)"
+  )
+  if not df.empty:
+    rekap_skpd = (
+        pd.pivot_table(
+            df,
+            index="SKPD_Nama",
+            columns="Kategori_Jenis",
+            values="No.",
+            aggfunc="count",
+            fill_value=0,
+        )
+        .reset_index()
+    )
+
+    for kat in ["Sepeda Motor", "Mobil", "Pick Up", "Lainnya"]:
+      if kat not in rekap_skpd.columns:
+        rekap_skpd[kat] = 0
+
+    cols_exist = ["Sepeda Motor", "Mobil", "Pick Up", "Lainnya"]
+    rekap_skpd["Jumlah Total"] = rekap_skpd[
+        [c for c in cols_exist if c in rekap_skpd.columns]
+    ].sum(axis=1)
+    rekap_skpd = rekap_skpd.sort_values(
+        by="Jumlah Total", ascending=False
+    ).reset_index(drop=True)
+
+    rekap_skpd = rekap_skpd.rename(
+        columns={
+            "SKPD_Nama": "Nama SKPD / Dinas",
+            "Sepeda Motor": "Jumlah Sepeda Motor",
+            "Mobil": "Jumlah Mobil",
+            "Pick Up": "Jumlah Pick Up",
+            "Lainnya": "Jumlah Lainnya",
+        }
+    )
+
+    st.dataframe(rekap_skpd, use_container_width=True, height=400)
+
 elif st.session_state.page == "table":
   col_back, col_ref, col_title = st.columns([1.5, 1.5, 5])
   with col_back:
@@ -270,13 +311,13 @@ elif st.session_state.page == "table":
   else:
     filtered_df = df[df["Kategori_Jenis"] == keyword]
 
-  # Filter per Nama SKPD dari Kolom 18 di dalam halaman tabel
+  # Filter per Nama SKPD dari Kolom 19 di dalam halaman tabel
   if not filtered_df.empty:
     skpd_list = ["Semua SKPD"] + sorted(
         list(filtered_df["SKPD_Nama"].dropna().unique())
     )
     pilih_skpd = st.selectbox(
-        "🏢 Filter Berdasarkan Nama SKPD / Dinas (Kolom 18):", skpd_list
+        "🏢 Filter Berdasarkan Nama SKPD / Dinas (Kolom 19):", skpd_list
     )
     if pilih_skpd != "Semua SKPD":
       filtered_df = filtered_df[filtered_df["SKPD_Nama"] == pilih_skpd]
@@ -301,9 +342,8 @@ elif st.session_state.page == "table":
       f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
   )
 
-  drop_cols = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama_Col"]
   display_df = filtered_df.drop(
-      columns=[c for c in drop_cols if c in filtered_df.columns], errors="ignore"
+      columns=["Harga_Clean", "Kategori_Jenis"], errors="ignore"
   ).reset_index(drop=True)
   st.dataframe(display_df, use_container_width=True, height=400)
 
