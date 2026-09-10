@@ -54,12 +54,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Urutan kolom KIB B standar yang akurat dan sesuai
+# Urutan 16 Kolom KIB B Baku (Tanpa Kode Lokasi, Posisi Kolom Presisi Sesuai Database Excel)
 kolom_kib_b = [
     "No.",
     "Kode Barang",
     "No. Urut",
-    "Kode Lokasi",
     "Jenis / Nama Barang",
     "No. Register",
     "Merk / Type",
@@ -95,13 +94,13 @@ def load_data():
     num_cols = len(df.columns)
     col_names = kolom_kib_b.copy()
     for i in range(len(col_names), num_cols):
-      col_names.append(f"Kolom_{i+1}")
+      if i == 16:
+        col_names.append("Nama Pengguna")
+      elif i == 17:
+        col_names.append("SKPD")
+      else:
+        col_names.append(f"Kolom_{i+1}")
     df.columns = col_names[:num_cols]
-
-    if num_cols >= 18:
-      df = df.rename(columns={df.columns[17]: "Nama Pengguna"})
-    if num_cols >= 19:
-      df = df.rename(columns={df.columns[18]: "SKPD"})
 
     def is_valid_row(val):
       try:
@@ -113,7 +112,7 @@ def load_data():
     df = df[df[df.columns[0]].apply(is_valid_row)].copy()
     df = df.reset_index(drop=True)
 
-    # Pembersihan format desimal .000000 / .0 pada seluruh sel data
+    # Pembersihan format desimal .0 / .000000 pada seluruh sel data string
     for col in df.columns:
       df[col] = (
           df[col]
@@ -135,11 +134,10 @@ def load_data():
     else:
       df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-    target_harga_idx = 15
-    if num_cols > target_harga_idx:
-      harga_col_actual = df.columns[target_harga_idx]
+    target_harga_col = "Harga (Rp)"
+    if target_harga_col in df.columns:
       df["Harga_Clean"] = pd.to_numeric(
-          df[harga_col_actual].str.replace(r"[^\d.]", "", regex=True),
+          df[target_harga_col].str.replace(r"[^\d.]", "", regex=True),
           errors="coerce",
       ).fillna(0)
     else:
@@ -358,8 +356,6 @@ elif st.session_state.page == "table":
       "Harga_Clean",
       "Kategori_Jenis",
       "SKPD_Nama",
-      "Kolom_20",
-      "Kolom_21",
   ]
   display_df = filtered_df.drop(
       columns=[c for c in columns_to_drop if c in filtered_df.columns],
