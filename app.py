@@ -54,13 +54,13 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Urutan kolom KIB B standar pemerintahan yang disesuaikan agar tidak tertukar
+# Urutan kolom KIB B standar yang akurat dan sesuai
 kolom_kib_b = [
     "No.",
-    "Kode Lokasi",
-    "No. Urut",
-    "Jenis / Nama Barang",
     "Kode Barang",
+    "No. Urut",
+    "Kode Lokasi",
+    "Jenis / Nama Barang",
     "No. Register",
     "Merk / Type",
     "Ukuran / CC",
@@ -87,7 +87,6 @@ def load_data():
       return pd.DataFrame(), None
 
   try:
-    # Membaca data dengan skiprows=16 untuk mempertahankan jumlah tepat 1603 baris
     df = pd.read_excel(
         file_path, sheet_name="KENDARAAN DINAS", skiprows=16, header=None
     )
@@ -99,6 +98,11 @@ def load_data():
       col_names.append(f"Kolom_{i+1}")
     df.columns = col_names[:num_cols]
 
+    if num_cols >= 18:
+      df = df.rename(columns={df.columns[17]: "Nama Pengguna"})
+    if num_cols >= 19:
+      df = df.rename(columns={df.columns[18]: "SKPD"})
+
     def is_valid_row(val):
       try:
         val_int = int(float(val))
@@ -109,7 +113,7 @@ def load_data():
     df = df[df[df.columns[0]].apply(is_valid_row)].copy()
     df = df.reset_index(drop=True)
 
-    # Pembersihan format desimal .000000 pada seluruh sel
+    # Pembersihan format desimal .000000 / .0 pada seluruh sel data
     for col in df.columns:
       df[col] = (
           df[col]
@@ -119,20 +123,9 @@ def load_data():
           .replace("None", "")
       )
 
-    if num_cols >= 19:
-      skpd_col_name = df.columns[18]
+    if "SKPD" in df.columns:
       df["SKPD_Nama"] = (
-          df[skpd_col_name]
-          .ffill()
-          .fillna("DINAS / INSTANSI LAINNYA")
-          .astype(str)
-          .str.upper()
-          .str.strip()
-      )
-    elif num_cols >= 18:
-      skpd_col_name = df.columns[17]
-      df["SKPD_Nama"] = (
-          df[skpd_col_name]
+          df["SKPD"]
           .ffill()
           .fillna("DINAS / INSTANSI LAINNYA")
           .astype(str)
@@ -145,13 +138,10 @@ def load_data():
     target_harga_idx = 15
     if num_cols > target_harga_idx:
       harga_col_actual = df.columns[target_harga_idx]
-      df["Harga_Clean"] = (
-          pd.to_numeric(
-              df[harga_col_actual].str.replace(r"[^\d.]", "", regex=True),
-              errors="coerce",
-          )
-          .fillna(0)
-      )
+      df["Harga_Clean"] = pd.to_numeric(
+          df[harga_col_actual].str.replace(r"[^\d.]", "", regex=True),
+          errors="coerce",
+      ).fillna(0)
     else:
       df["Harga_Clean"] = 0
 
@@ -159,7 +149,6 @@ def load_data():
       combined = " ".join(
           [str(val) for val in row.values if pd.notna(val)]
       ).lower()
-
       if any(k in combined for k in ["pick up", "pickup", "bak terbuka"]):
         return "Pick Up"
       elif any(
@@ -267,7 +256,8 @@ if st.session_state.page == "menu":
     with st.container(border=True):
       st.markdown("### 📦 *Semua Kendaraan*")
       st.write(
-          f"Total Unit: *{t_semua:,} Data\n\nTotal Nilai Aset: *{p_semua}**"
+          f"Total Unit: *{t_semua:,} Data*\n\nTotal Nilai Aset:"
+          f" *{p_semua}*"
       )
       if st.button("Kelola Semua Kendaraan", key="btn_semua"):
         st.session_state.keyword = ""
@@ -279,7 +269,8 @@ if st.session_state.page == "menu":
     with st.container(border=True):
       st.markdown("### 🚗 *Mobil*")
       st.write(
-          f"Total Unit: *{t_mobil:,} Data\n\nTotal Nilai Aset: *{p_mobil}**"
+          f"Total Unit: *{t_mobil:,} Data*\n\nTotal Nilai Aset:"
+          f" *{p_mobil}*"
       )
       if st.button("Kelola Data Mobil", key="btn_mobil"):
         st.session_state.keyword = "Mobil"
@@ -291,7 +282,8 @@ if st.session_state.page == "menu":
     with st.container(border=True):
       st.markdown("### 🏍️ *Sepeda Motor*")
       st.write(
-          f"Total Unit: *{t_motor:,} Data\n\nTotal Nilai Aset: *{p_motor}**"
+          f"Total Unit: *{t_motor:,} Data*\n\nTotal Nilai Aset:"
+          f" *{p_motor}*"
       )
       if st.button("Kelola Sepeda Motor", key="btn_motor"):
         st.session_state.keyword = "Sepeda Motor"
@@ -362,9 +354,18 @@ elif st.session_state.page == "table":
       f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
   )
 
+  columns_to_drop = [
+      "Harga_Clean",
+      "Kategori_Jenis",
+      "SKPD_Nama",
+      "Kolom_20",
+      "Kolom_21",
+  ]
   display_df = filtered_df.drop(
-      columns=["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"], errors="ignore"
+      columns=[c for c in columns_to_drop if c in filtered_df.columns],
+      errors="ignore",
   ).reset_index(drop=True)
+
   st.dataframe(display_df, use_container_width=True, height=400)
 
   st.markdown("---")
@@ -403,7 +404,6 @@ elif st.session_state.page == "table":
           "Keterangan / Isi Data": values_list,
       })
 
-      # --- PREVIEW BERGARIS PADA LAYAR ---
       styled_preview = (
           detail_df.style.set_table_styles([
               {
@@ -437,7 +437,6 @@ elif st.session_state.page == "table":
 
       col_e1, col_e2, col_e3 = st.columns(3)
 
-      # 1. Download Excel Styled Vertical Card
       with col_e1:
 
         def create_styled_vertical_excel(cols, vals):
@@ -506,7 +505,6 @@ elif st.session_state.page == "table":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-      # 2. Download CSV Detail
       with col_e2:
         csv_data = detail_df.to_csv(index=False).encode("utf-8")
         st.download_button(
@@ -516,14 +514,12 @@ elif st.session_state.page == "table":
             mime="text/csv",
         )
 
-      # 3. Download & Preview PDF Detail
       with col_e3:
 
         def create_pdf_detail(cols, vals):
           pdf = FPDF(orientation="P", unit="mm", format="A4")
           pdf.add_page()
 
-          # Header Title
           pdf.set_font("Arial", "B", 14)
           pdf.set_text_color(30, 60, 114)
           pdf.cell(
@@ -569,16 +565,3 @@ elif st.session_state.page == "table":
             file_name=f"Detail_Kendaraan_{selected_row_idx+1}.pdf",
             mime="application/pdf",
         )
-
-      # Preview PDF menggunakan tag iframe agar langsung terlihat di layar
-      st.markdown("---")
-      st.markdown(
-          "<p style='font-weight:600; color:#1e3c72;'>Preview Dokumen"
-          " PDF:</p>",
-          unsafe_allow_html=True,
-      )
-      import base64
-
-      base64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
-      pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="500px" type="application/pdf"></iframe>'
-      st.markdown(pdf_display, unsafe_allow_html=True)
