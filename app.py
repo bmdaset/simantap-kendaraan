@@ -54,11 +54,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Urutan 16 Kolom KIB B Baku (Tanpa Kode Lokasi, Posisi Kolom Presisi Sesuai Database Excel)
+# Susunan Kolom KIB B Sesuai Struktur Presisi Excel (Sinkronisasi Indeks agar Tidak Tertukar)
 kolom_kib_b = [
     "No.",
     "Kode Barang",
     "No. Urut",
+    "Kode Lokasi",
     "Jenis / Nama Barang",
     "No. Register",
     "Merk / Type",
@@ -72,6 +73,8 @@ kolom_kib_b = [
     "Asal Usul",
     "Harga (Rp)",
     "Keterangan",
+    "Nama Pengguna",
+    "SKPD",
 ]
 
 
@@ -94,12 +97,7 @@ def load_data():
     num_cols = len(df.columns)
     col_names = kolom_kib_b.copy()
     for i in range(len(col_names), num_cols):
-      if i == 16:
-        col_names.append("Nama Pengguna")
-      elif i == 17:
-        col_names.append("SKPD")
-      else:
-        col_names.append(f"Kolom_{i+1}")
+      col_names.append(f"Kolom_{i+1}")
     df.columns = col_names[:num_cols]
 
     def is_valid_row(val):
@@ -352,10 +350,17 @@ elif st.session_state.page == "table":
       f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
   )
 
+  # Menghilangkan Kode Lokasi serta Kolom 19 sampai Kolom 21 sesuai permintaan
   columns_to_drop = [
       "Harga_Clean",
       "Kategori_Jenis",
       "SKPD_Nama",
+      "Kode Lokasi",
+      "SKPD",
+      "Kolom_20",
+      "Kolom_21",
+      "Kolom_22",
+      "Kolom_23",
   ]
   display_df = filtered_df.drop(
       columns=[c for c in columns_to_drop if c in filtered_df.columns],
