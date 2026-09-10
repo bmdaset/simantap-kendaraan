@@ -77,17 +77,37 @@ kolom_kib_b = [
 
 @st.cache_data
 def load_data():
-  file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
-  if not os.path.exists(file_path):
-    all_excel = glob.glob(".xlsx") + glob.glob(".xls")
-    if all_excel:
-      file_path = all_excel[0]
-    else:
-      return pd.DataFrame(), None
+  all_excel = glob.glob(".xlsx") + glob.glob(".xls")
+  if not all_excel:
+    return pd.DataFrame(), None
 
+  file_path = all_excel[0]
   try:
+    xl = pd.ExcelFile(file_path)
+    sheet_names = xl.sheet_names
+
+    # Pilih sheet yang sesuai (utamakan 'KENDARAAN DINAS' atau sheet pertama)
+    target_sheet = sheet_names[0]
+    for s in sheet_names:
+      if "kendaraan" in s.lower() or "b" in s.lower():
+        target_sheet = s
+        break
+
+    df = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
+
+    # Cari baris header otomatis jika ada kata 'No.' atau 'Jenis'
+    header_row_idx = 0
+    for idx, row in df.iterrows():
+      row_str = " ".join(row.astype(str).values).lower()
+      if "no" in row_str and (
+          "barang" in row_str or "jenis" in row_str or "register" in row_str
+      ):
+        header_row_idx = idx
+        break
+
+    # Muat ulang dengan skiprows yang tepat
     df = pd.read_excel(
-        file_path, sheet_name="KENDARAAN DINAS", skiprows=16, header=None
+        file_path, sheet_name=target_sheet, skiprows=header_row_idx, header=None
     )
     df = df.dropna(how="all").reset_index(drop=True)
 
@@ -97,7 +117,7 @@ def load_data():
       col_names.append(f"Kolom_{i+1}")
     df.columns = col_names[:num_cols]
 
-    # Ubah nama Kolom 18 dan Kolom 19
+    # Ubah nama Kolom 18 dan Kolom 19 jika ada
     if num_cols >= 18:
       df = df.rename(columns={df.columns[17]: "Nama Pengguna"})
     if num_cols >= 19:
@@ -110,8 +130,9 @@ def load_data():
       except:
         return False
 
-    df = df[df[df.columns[0]].apply(is_valid_row)].copy()
-    df = df.reset_index(drop=True)
+    if not df.empty:
+      df = df[df[df.columns[0]].apply(is_valid_row)].copy()
+      df = df.reset_index(drop=True)
 
     if "SKPD" in df.columns:
       df["SKPD_Nama"] = (
@@ -183,7 +204,9 @@ def load_data():
       else:
         return "Lainnya"
 
-    df["Kategori_Jenis"] = df.apply(deteksi_kategori, axis=1)
+    df["Kategori_Jenis"] = (
+        df.apply(deteksi_kategori, axis=1) if not df.empty else []
+    )
 
     return df, file_path
   except Exception as e:
@@ -227,7 +250,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if st.session_state.page == "menu":
+if df.empty:
+  st.error(
+      "⚠️ File Excel tidak ditemukan atau format data tidak dapat dibaca."
+      " Pastikan file Excel sudah di-upload ke repository GitHub Anda."
+  )
+elif st.session_state.page == "menu":
   st.markdown(
       "<h4 style='text-align:center; color:#34495e; margin-bottom:25px;'>Silakan"
       " Pilih Kategori Aset Kendaraan</h4>",
