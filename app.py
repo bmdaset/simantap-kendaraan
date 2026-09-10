@@ -11,6 +11,14 @@ st.set_page_config(
 
 st.markdown("""
     <style>
+    /* Perbaikan kontras warna teks agar jelas terlihat */
+    html, body, [class*="st-"] {
+        color: #1f1f1f;
+    }
+    .stTextInput input, .stSelectbox select {
+        color: #1f1f1f !important;
+        background-color: #ffffff !important;
+    }
     .stButton>button {
         width: 100%;
         border-radius: 8px;
@@ -29,8 +37,6 @@ st.markdown("""
 
 if 'keyword' not in st.session_state:
     st.session_state.keyword = ""
-if 'title' not in st.session_state:
-    st.session_state.title = "Semua Kendaraan Dinas"
 
 @st.cache_data
 def load_data():
@@ -46,7 +52,7 @@ def load_data():
     header_row = 0
     for idx, row in df_raw.head(15).iterrows():
         row_str = " ".join(row.fillna("").astype(str)).lower()
-        if "no" in row_str and any(k in row_str for k in ["jenis", "merek", "skpd", "kode", "nopol", "polisi"]):
+        if "no" in row_str and any(k in row_str for k in ["jenis", "merek", "skpd", "kode", "nopol", "polisi", "barang"]):
             header_row = idx
             break
     
@@ -72,28 +78,34 @@ if df is not None:
     df = df[~df[kolom_no].astype(str).str.lower().str.contains('jumlah|total|no', na=False)]
     df = df.reset_index(drop=True)
 
-    # Deteksi Kolom SKPD yang Akurat (Mencari teks nama instansi)
-    skpd_col = None
+    # Deteksi Otomatis Kolom SKPD / Dinas
+    default_skpd_col = None
+    max_score = -1
     for col in df.columns:
-        c_lower = str(col).lower()
-        if any(k in c_lower for k in ['skpd', 'unit kerja', 'opd', 'instansi', 'dinas']):
-            skpd_col = col
-            break
+        try:
+            col_vals = df[col].dropna().astype(str).str.lower()
+            score = col_vals.str.contains('dinas|badan|sekretariat|kecamatan|rsud|inspektorat|biro|satpol|pemerintah|kantor|bagian|upt|kelurahan|desa|dprd', regex=True, na=False).sum()
+            has_vehicle = col_vals.str.contains('sepeda motor|mobil|pick up|truk|bus|jeep', regex=True, na=False).sum()
+            if score > max_score and has_vehicle == 0:
+                max_score = score
+                default_skpd_col = col
+        except:
+            pass
 
-    if not skpd_col:
-        max_matches = 0
+    if not default_skpd_col:
         for col in df.columns:
-            try:
-                val_str = df[col].dropna().astype(str).str.lower()
-                matches = val_str.str.contains('dinas|badan|sekretariat|kecamatan|rsud|inspektorat|biro|satpol|pemerintah|upt', case=False, regex=True).sum()
-                if matches > max_matches:
-                    max_matches = matches
-                    skpd_col = col
-            except:
-                pass
+            c_lower = str(col).lower()
+            if any(k in c_lower for k in ['skpd', 'unit', 'opd', 'instansi', 'dinas', 'pemilik']):
+                default_skpd_col = col
+                break
+    if not default_skpd_col:
+        default_skpd_col = df.columns[min(2, len(df.columns)-1)]
 
+    # Pengaturan Manual Kolom SKPD (jaga-jaga jika deteksi otomatis kurang pas)
+    with st.expander("⚙️ Pengaturan Lanjutan (Pilih Kolom SKPD jika nama dinas belum muncul)"):
+        skpd_col = st.selectbox("Pilih kolom yang berisi Nama SKPD / Dinas:", df.columns.tolist(), index=list(df.columns).index(default_skpd_col) if default_skpd_col in df.columns else 0)
     if not skpd_col:
-        skpd_col = df.columns[min(2, len(df.columns)-1)]
+        skpd_col = default_skpd_col
 
     def deteksi_kategori(row):
         text = " ".join(row.fillna("").astype(str)).lower()
@@ -114,28 +126,24 @@ if df is not None:
     t_pickup = len(df[df['Kategori_Jenis'] == "Pick Up"])
 
     st.markdown("<h3 style='margin-bottom: 0px;'>🚗 SIMANTAP - Kendaraan Dinas</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='color: gray; font-size: 13px; margin-bottom: 15px;'>Sistem Informasi Manajemen Aset & Kendaraan Dinas</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #555555; font-size: 13px; margin-bottom: 15px;'>Sistem Informasi Manajemen Aset & Kendaraan Dinas</p>", unsafe_allow_html=True)
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button(f"🔴 Semua Data\n({t_semua})", key="b_semua"):
             st.session_state.keyword = ""
-            st.session_state.title = "Semua Kendaraan"
             st.rerun()
     with col2:
         if st.button(f"🟡 Mobil\n({t_mobil})", key="b_mobil"):
             st.session_state.keyword = "mobil"
-            st.session_state.title = "Kendaraan Mobil"
             st.rerun()
     with col3:
         if st.button(f"🟢 Sepeda Motor\n({t_motor})", key="b_motor"):
             st.session_state.keyword = "sepeda motor"
-            st.session_state.title = "Kendaraan Sepeda Motor"
             st.rerun()
     with col4:
         if st.button(f"🔵 Pick Up\n({t_pickup})", key="b_pickup"):
             st.session_state.keyword = "pick up"
-            st.session_state.title = "Kendaraan Pick Up"
             st.rerun()
 
     st.markdown("---")
@@ -145,27 +153,37 @@ if df is not None:
     with tab1:
         c_f1, c_f2 = st.columns([2, 2])
         with c_f1:
-            daftar_skpd = ["Semua SKPD"] + sorted([str(x) for x in df[skpd_col].dropna().unique() if str(x).strip() != ''])
+            daftar_skpd = ["Semua SKPD"] + sorted([str(x) for x in df[skpd_col].dropna().unique() if str(x).strip() != '' and not str(x).replace('.','',1).isdigit()])
             pilih_skpd_main = st.selectbox("Filter berdasarkan SKPD:", daftar_skpd, key="skpd_main_filter")
         with c_f2:
-            search_query = st.text_input("Cari cepat:", value=st.session_state.keyword, placeholder="Ketik No Polisi atau Jenis...")
+            search_query = st.text_input("Cari cepat (Nopol, Jenis, Merek, dll):", value=st.session_state.keyword, placeholder="Ketik No Polisi atau kata kunci...")
 
         df_filtered = df.copy()
         if pilih_skpd_main != "Semua SKPD":
             df_filtered = df_filtered[df_filtered[skpd_col].astype(str).str.strip() == pilih_skpd_main]
 
+        # Pencarian fleksibel berbasis baris agar preview tidak hilang
         if search_query:
-            mask = df_filtered.astype(str).apply(lambda col: col.str.lower().str.contains(search_query.lower(), na=False)).any(axis=1)
+            query_parts = search_query.lower().split()
+            def match_row(row):
+                row_str = " ".join(row.fillna("").astype(str)).lower()
+                return all(part in row_str for part in query_parts)
+            mask = df_filtered.apply(match_row, axis=1)
             df_filtered = df_filtered[mask]
 
         display_df = df_filtered.drop(columns=["Kategori_Jenis"], errors="ignore").reset_index(drop=True)
-        st.dataframe(display_df, use_container_width=True, height=380)
+        
+        if len(display_df) > 0:
+            st.dataframe(display_df, use_container_width=True, height=380)
+        else:
+            st.warning("⚠️ Tidak ada data kendaraan yang cocok dengan pencarian / filter tersebut.")
+            st.dataframe(display_df, use_container_width=True, height=380)
 
     with tab2:
         try:
             df_rekap = df.copy()
             df_rekap[skpd_col] = df_rekap[skpd_col].fillna("").astype(str).str.strip()
-            df_rekap = df_rekap[df_rekap[skpd_col] != '']
+            df_rekap = df_rekap[(df_rekap[skpd_col] != '') & (~df_rekap[skpd_col].str.replace('.','',1).isdigit())]
 
             rekap_skpd = pd.pivot_table(
                 df_rekap,
