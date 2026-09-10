@@ -54,12 +54,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Susunan Kolom KIB B Sesuai Struktur Presisi Excel (Sinkronisasi Indeks agar Tidak Tertukar)
+# Standar Baku Kolom KIB B Pemerintah & Data Kendaraan (STNK)
 kolom_kib_b = [
     "No.",
     "Kode Barang",
     "No. Urut",
-    "Kode Lokasi",
     "Jenis / Nama Barang",
     "No. Register",
     "Merk / Type",
@@ -92,7 +91,8 @@ def load_data():
     df = pd.read_excel(
         file_path, sheet_name="KENDARAAN DINAS", skiprows=16, header=None
     )
-    df = df.dropna(how="all").reset_index(drop=True)
+    # Hapus baris dan kolom yang kosong total agar tidak terjadi pergeseran indeks
+    df = df.dropna(how="all").dropna(axis=1, how="all").reset_index(drop=True)
 
     num_cols = len(df.columns)
     col_names = kolom_kib_b.copy()
@@ -350,17 +350,12 @@ elif st.session_state.page == "table":
       f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
   )
 
-  # Menghilangkan Kode Lokasi serta Kolom 19 sampai Kolom 21 sesuai permintaan
+  # Membuang kolom bantu sistem serta kolom 19-21 sesuai permintaan
   columns_to_drop = [
       "Harga_Clean",
       "Kategori_Jenis",
       "SKPD_Nama",
-      "Kode Lokasi",
       "SKPD",
-      "Kolom_20",
-      "Kolom_21",
-      "Kolom_22",
-      "Kolom_23",
   ]
   display_df = filtered_df.drop(
       columns=[c for c in columns_to_drop if c in filtered_df.columns],
