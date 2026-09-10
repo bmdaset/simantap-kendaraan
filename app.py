@@ -100,7 +100,7 @@ def load_data_from_bytes(file_bytes, file_name_str):
 
     header_row_idx = 0
     for idx, row in df.iterrows():
-      row_str = " ".join(row.astype(str).values).lower()
+      row_str = " ".join([str(v) for v in row.values if pd.notna(v)]).lower()
       if "no" in row_str and (
           "barang" in row_str or "jenis" in row_str or "register" in row_str
       ):
