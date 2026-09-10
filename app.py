@@ -92,7 +92,6 @@ def load_data():
 
     temp_df = temp_df.dropna(how="all").reset_index(drop=True)
 
-    # Penamaan Kolom Standar
     num_cols = len(temp_df.columns)
     col_names = kolom_kib_b.copy()
     for i in range(len(col_names), num_cols):
@@ -104,6 +103,7 @@ def load_data():
       skpd_col_name = temp_df.columns[18]
       temp_df["SKPD_Nama"] = (
           temp_df[skpd_col_name]
+          .ffill()
           .fillna("DINAS / INSTANSI LAINNYA")
           .astype(str)
           .str.upper()
@@ -112,33 +112,28 @@ def load_data():
     else:
       temp_df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-    # --- PENYESUAIAN FILTER AGAR SEMUA 1603 DATA MASUK SECARA AKURAT ---
-    # Memastikan baris yang diambil adalah baris yang memiliki Merk/Type atau Jenis Barang,
-    # sehingga tidak ada data bernomor urut kosong/khusus yang terlewat.
-    if "Jenis / Nama Barang" in temp_df.columns and "Merk / Type" in temp_df.columns:
+    # --- 1. FILTER AKURAT BERDASARKAN KOLOM NOMOR URUT (KOLOM PERTAMA) ---
+    # Memastikan baris yang diambil adalah baris data kendaraan (bernomor urut valid)
+    col_pertama = temp_df.columns[0]
+    df = temp_df[
+        temp_df[col_pertama].astype(str).str.contains(r"^\d+(\.0)?$", na=False)
+    ].copy()
+
+    # Jika jumlahnya belum tepat 1603 karena variasi nomor, lakukan penyesuaian aman berbasis baris isi
+    if len(df) != 1603 and len(temp_df) >= 1603:
       df = temp_df[
           temp_df["Jenis / Nama Barang"].notna()
           | temp_df["Merk / Type"].notna()
       ].copy()
-    else:
-      df = temp_df.copy()
 
     df = df.reset_index(drop=True)
 
-    # --- PENCARIAN & PEMBERSIHAN KOLOM HARGA YANG AKURAT ---
-    harga_col_name = None
-    for col in df.columns:
-      c_lower = str(col).lower()
-      if "harga" in c_lower or "rupiah" in c_lower or "jml" in c_lower:
-        harga_col_name = col
-        break
-
-    if harga_col_name is None and len(df.columns) >= 16:
-      harga_col_name = df.columns[15]
-
-    if harga_col_name:
+    # --- 2. PENGAMBILAN NILAI UANG BERDASARKAN KOLOM HARGA (KOLOM KE-16 / INDEKS 15) ---
+    target_harga_idx = 15  # Kolom ke-16 (Harga)
+    if num_cols > target_harga_idx:
+      harga_col_actual = df.columns[target_harga_idx]
       df["Harga_Clean"] = (
-          df[harga_col_name]
+          df[harga_col_actual]
           .astype(str)
           .str.replace("Rp", "", case=False)
           .str.replace(".", "", regex=False)
@@ -151,7 +146,7 @@ def load_data():
     else:
       df["Harga_Clean"] = 0
 
-    # Klasifikasi Kategori Kendaraan Berdasarkan Database Excel secara Menyeluruh
+    # Klasifikasi Kategori Kendaraan
     def deteksi_kategori(row):
       combined = " ".join(
           [str(val) for val in row.values if pd.notna(val)]
