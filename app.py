@@ -130,34 +130,16 @@ def load_data_from_bytes(file_bytes, file_name_str):
     if num_cols >= 19:
       df = df.rename(columns={df.columns[18]: "SKPD"})
 
-    # Filter baris valid dan buang baris total/jumlah/tanda tangan
-    def is_valid_row(row):
-      val = row.iloc[0]
+    # Filter baris berdasarkan nomor urut/kolom pertama yang valid
+    def is_valid_row(val):
       try:
         val_int = int(float(val))
-        if val_int <= 0:
-          return False
+        return val_int > 0
       except:
         return False
 
-      row_text = " ".join([str(v) for v in row.values if pd.notna(v)]).lower()
-      bad_keywords = [
-          "jumlah",
-          "total",
-          "sub total",
-          "kabupaten",
-          "kepala",
-          "nip.",
-          "tanggal",
-          "mengetahui",
-      ]
-      if any(k in row_text for k in bad_keywords):
-        return False
-
-      return True
-
     if not df.empty:
-      df = df[df.apply(is_valid_row, axis=1)].copy()
+      df = df[df[df.columns[0]].apply(is_valid_row)].copy()
       df = df.reset_index(drop=True)
 
     if "SKPD" in df.columns:
