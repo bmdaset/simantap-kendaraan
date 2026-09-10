@@ -56,23 +56,18 @@ if df is not None:
     df = df[~df[kolom_no].astype(str).str.lower().str.contains('jumlah|total|no', na=False)]
     df = df.reset_index(drop=True)
 
-    # Deteksi otomatis kolom SKPD
+    # Deteksi kolom SKPD secara akurat berdasarkan kemunculan nama instansi terbanyak
     skpd_col = None
+    max_skpd_count = 0
     for col in df.columns:
-        col_str = str(col).lower()
-        if any(k in col_str for k in ['skpd', 'unit', 'opd', 'dinas', 'instansi']):
-            skpd_col = col
-            break
-
-    if not skpd_col:
-        for col in df.columns:
-            try:
-                sample_text = df[col].dropna().astype(str).str.lower().str.cat(sep=" ")
-                if any(kw in sample_text for kw in ['dinas', 'badan', 'sekretariat', 'inspektorat', 'kecamatan', 'rsud']):
-                    skpd_col = col
-                    break
-            except:
-                pass
+        try:
+            col_lower = df[col].dropna().astype(str).str.lower()
+            count = col_lower.str.contains('dinas|badan|sekretariat|kecamatan|rsud|inspektorat|biro|satpol', na=False).sum()
+            if count > max_skpd_count:
+                max_skpd_count = count
+                skpd_col = col
+        except:
+            pass
 
     if not skpd_col:
         if len(df.columns) > 18:
@@ -170,7 +165,6 @@ if df is not None:
         rekap_skpd['Total'] = rekap_skpd[kolom_tersedia].sum(axis=1)
         rekap_skpd = rekap_skpd.sort_values(by='Total', ascending=False).reset_index(drop=True)
         
-        # Ubah nama kolom agar rapi
         rekap_skpd = rekap_skpd.rename(columns={skpd_col: "NAMA SKPD / UNIT KERJA"})
 
         daftar_skpd = ["Semua SKPD"] + list(rekap_skpd["NAMA SKPD / UNIT KERJA"].unique())
