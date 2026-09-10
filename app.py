@@ -50,26 +50,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-kolom_kib_b = [
-    "No.",
-    "Kode Lokasi",
-    "No. Urut",
-    "Kode Barang",
-    "Jenis / Nama Barang",
-    "No. Register",
-    "Merk / Type",
-    "Ukuran / CC",
-    "Bahan",
-    "Tahun Pembuatan",
-    "No. Pabrik",
-    "No. Rangka",
-    "No. Mesin",
-    "No. Polisi",
-    "Asal Usul",
-    "Harga (Rp)",
-    "Keterangan",
-]
-
 
 @st.cache_data
 def load_data():
@@ -82,26 +62,52 @@ def load_data():
       return pd.DataFrame(), None
 
   try:
-    try:
-      temp_df = pd.read_excel(
-          file_path, sheet_name="KENDARAAN DINAS", skiprows=17, header=None
-      )
-    except Exception:
-      temp_df = pd.read_excel(file_path, skiprows=17, header=None)
+    # 1. Baca mentah file Excel tanpa header untuk mendeteksi letak baris tabel secara otomatis
+    raw_df = pd.read_excel(file_path, sheet_name="KENDARAAN DINAS", header=None)
 
-    temp_df = temp_df.dropna(how="all").reset_index(drop=True)
+    # 2. Cari baris header secara otomatis (mencari baris yang mengandung teks 'Kode Barang' atau 'No. Urut')
+    header_row_idx = None
+    for idx, row in raw_df.iterrows():
+      row_str = " ".join([str(val).lower() for val in row.values])
+      if "kode barang" in row_str or "no. urut" in row_str:
+        header_row_idx = idx
+        break
 
-    num_cols = len(temp_df.columns)
-    col_names = kolom_kib_b.copy()
-    for i in range(len(col_names), num_cols):
-      col_names.append(f"Kolom_{i+1}")
-    temp_df.columns = col_names[:num_cols]
+    # Jika tidak ketemu, fallback ke baris ke-16 (indeks 16)
+    if header_row_idx is None:
+      header_row_idx = 16
 
-    # Mengambil Nama SKPD mutlak dari Kolom ke-19 (Indeks 18)
-    if num_cols >= 19:
-      skpd_col_name = temp_df.columns[18]
-      temp_df["SKPD_Nama"] = (
-          temp_df[skpd_col_name]
+    # 3. Ambil data mulai dari baris setelah header secara otomatis
+    df = pd.read_excel(
+        file_path,
+        sheet_name="KENDARAAN DINAS",
+        skiprows=header_row_idx + 1,
+        header=None,
+    )
+
+    # 4. Ambil nama kolom secara dinamis dari baris header Excel
+    col_names = list(raw_df.iloc[header_row_idx].values)
+    col_names = [
+        str(col).strip()
+        if pd.notna(col) and str(col).strip() != ""
+        else f"Kolom_{i+1}"
+        for i, col in enumerate(col_names)
+    ]
+
+    # Sesuaikan jumlah kolom jika ada penambahan kolom baru di Excel
+    if len(col_names) < len(df.columns):
+      for i in range(len(col_names), len(df.columns)):
+        col_names.append(f"Kolom_{i+1}")
+    df.columns = col_names[: len(df.columns)]
+
+    # Bersihkan baris kosong
+    df = df.dropna(how="all").reset_index(drop=True)
+
+    # 5. Deteksi otomatis kolom SKPD / Unit (biasanya di kolom ke-19 atau bernamanya SKPD/Unit/Dinas)
+    if len(df.columns) >= 19:
+      skpd_col_name = df.columns[18]
+      df["SKPD_Nama"] = (
+          df[skpd_col_name]
           .ffill()
           .fillna("DINAS / INSTANSI LAINNYA")
           .astype(str)
@@ -109,44 +115,49 @@ def load_data():
           .str.strip()
       )
     else:
-      temp_df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
+      df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-    # --- MEMASTIKAN TEPAT 1,603 DATA TANPA TERPOTONG ---
-    # Mengambil baris yang memiliki Jenis Barang atau Merk yang valid sebagai basis data
-    df = temp_df[
-        temp_df["Jenis / Nama Barang"].notna()
-        | temp_df["Merk / Type"].notna()
-    ].copy()
+    # 6. Filter baris data kendaraan secara dinamis (Menerima berapapun jumlah baris, asal kolom pertama berupa angka nomor urut, dan membuang baris 'JUMLAH TOTAL')
+    col_pertama = df.columns[0]
+
+    def is_valid_row(val):
+      try:
+        val_str = str(val).strip()
+        if (
+            "jumlah" in val_str.lower()
+            or "total" in val_str.lower()
+            or val_str == ""
+        ):
+          return False
+        val_int = int(float(val_str))
+        return val_int > 0
+      except:
+        return False
+
+    df = df[df[col_pertama].apply(is_valid_row)].copy()
     df = df.reset_index(drop=True)
 
-    # --- PENCARIAN KOLOM HARGA SECARA DINAMIS & AMAN ---
-    harga_col_actual = None
+    # 7. Deteksi otomatis kolom Harga (mencari kolom yang mengandung kata 'harga' atau 'rp')
+    harga_col = None
     for col in df.columns:
-      if "harga" in str(col).lower():
-        harga_col_actual = col
+      if "harga" in col.lower() or "rp" in col.lower():
+        harga_col = col
         break
 
-    if not harga_col_actual and len(df.columns) > 15:
-      harga_col_actual = df.columns[15]  # Fallback ke indeks 15 jika tidak ketemu
-
-    if harga_col_actual:
-      df["Harga_Clean"] = (
-          df[harga_col_actual]
-          .astype(str)
-          .str.replace("Rp", "", case=False)
-          .str.replace(".", "", regex=False)
-          .str.replace(",", ".", regex=False)
-          .str.strip()
-      )
+    if harga_col:
       df["Harga_Clean"] = pd.to_numeric(
-          df["Harga_Clean"], errors="coerce"
+          df[harga_col], errors="coerce"
       ).fillna(0)
-      # Batasi anomali nilai per unit (misal maksimal 15 Miliar per kendaraan) agar total uang masuk akal
-      df.loc[df["Harga_Clean"] > 15000000000, "Harga_Clean"] = 0
     else:
-      df["Harga_Clean"] = 0
+      # Fallback jika nama kolom tidak standar, gunakan kolom ke-16 (indeks 15)
+      if len(df.columns) > 15:
+        df["Harga_Clean"] = pd.to_numeric(
+            df.iloc[:, 15], errors="coerce"
+        ).fillna(0)
+      else:
+        df["Harga_Clean"] = 0
 
-    # Klasifikasi Kategori Kendaraan
+    # 8. Klasifikasi Kategori Kendaraan Otomatis
     def deteksi_kategori(row):
       combined = " ".join(
           [str(val) for val in row.values if pd.notna(val)]
@@ -200,7 +211,8 @@ def load_data():
     df["Kategori_Jenis"] = df.apply(deteksi_kategori, axis=1)
 
     return df, file_path
-  except Exception:
+  except Exception as e:
+    print("Error:", e)
     return pd.DataFrame(), None
 
 
@@ -328,7 +340,7 @@ elif st.session_state.page == "table":
         list(filtered_df["SKPD_Nama"].dropna().unique())
     )
     pilih_skpd = st.selectbox(
-        "🏢 Filter Berdasarkan Nama SKPD / Dinas (Kolom 19):", skpd_list
+        "🏢 Filter Berdasarkan Nama SKPD / Dinas:", skpd_list
     )
     if pilih_skpd != "Semua SKPD":
       filtered_df = filtered_df[filtered_df["SKPD_Nama"] == pilih_skpd]
