@@ -123,8 +123,7 @@ if df is not None:
     st.markdown("---")
     st.markdown("### 📊 Rekap Rinci Jumlah Kendaraan per SKPD")
     
-    # Pilihan kolom manual untuk memastikan nama SKPD yang tampil benar
-    all_columns = list(df.columns)
+    all_columns = [col for col in df.columns if not str(col).startswith('Unnamed')]
     default_idx = 0
     for i, col in enumerate(all_columns):
         col_lower = str(col).lower()
@@ -135,24 +134,32 @@ if df is not None:
     selected_skpd_col = st.selectbox("Pilih Kolom untuk Nama SKPD:", all_columns, index=default_idx)
 
     if selected_skpd_col:
-        rekap_skpd = pd.pivot_table(
-            df,
-            index=selected_skpd_col,
-            columns='Kategori_Jenis',
-            values=kolom_no,
-            aggfunc='count',
-            fill_value=0
-        ).reset_index()
+        try:
+            # Membersihkan data baris kosong pada kolom SKPD yang dipilih
+            df_rekap = df.dropna(subset=[selected_skpd_col]).copy()
+            df_rekap[selected_skpd_col] = df_rekap[selected_skpd_col].astype(str).str.strip()
+            df_rekap = df_rekap[df_rekap[selected_skpd_col] != '']
 
-        for kat in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya']:
-            if kat not in rekap_skpd.columns:
-                rekap_skpd[kat] = 0
+            rekap_skpd = pd.pivot_table(
+                df_rekap,
+                index=selected_skpd_col,
+                columns='Kategori_Jenis',
+                values=kolom_no,
+                aggfunc='count',
+                fill_value=0
+            ).reset_index()
 
-        kolom_tersedia = [c for c in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya'] if c in rekap_skpd.columns]
-        rekap_skpd['Total'] = rekap_skpd[kolom_tersedia].sum(axis=1)
-        rekap_skpd = rekap_skpd.sort_values(by='Total', ascending=False).reset_index(drop=True)
+            for kat in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya']:
+                if kat not in rekap_skpd.columns:
+                    rekap_skpd[kat] = 0
 
-        st.table(rekap_skpd)
+            kolom_tersedia = [c for c in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya'] if c in rekap_skpd.columns]
+            rekap_skpd['Total'] = rekap_skpd[kolom_tersedia].sum(axis=1)
+            rekap_skpd = rekap_skpd.sort_values(by='Total', ascending=False).reset_index(drop=True)
+
+            st.table(rekap_skpd)
+        except Exception as e:
+            st.warning("Silakan pilih kolom lain pada pilihan di atas yang berisi teks nama SKPD/Unit Kerja yang valid.")
     else:
         st.warning("Silakan pilih kolom SKPD yang sesuai.")
 else:
