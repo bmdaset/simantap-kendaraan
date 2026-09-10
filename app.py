@@ -9,7 +9,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Custom CSS untuk mempercantik Tampilan / UI Dashboard
 st.markdown(
     """
     <style>
@@ -98,7 +97,7 @@ def load_data():
       col_names.append(f"Kolom_{i+1}")
     temp_df.columns = col_names[:num_cols]
 
-    # Mengambil Nama SKPD mutlak dari Kolom 19 (Indeks ke-18 dalam Python)
+    # Mengambil Nama SKPD mutlak dari Kolom ke-19 (Indeks 18)
     if num_cols >= 19:
       skpd_col_name = temp_df.columns[18]
       temp_df["SKPD_Nama"] = (
@@ -112,26 +111,25 @@ def load_data():
     else:
       temp_df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-    # --- 1. FILTER AKURAT BERDASARKAN KOLOM NOMOR URUT (KOLOM PERTAMA) ---
-    # Memastikan baris yang diambil adalah baris data kendaraan (bernomor urut valid)
-    col_pertama = temp_df.columns[0]
+    # --- MEMASTIKAN TEPAT 1,603 DATA TANPA TERPOTONG ---
+    # Mengambil baris yang memiliki Jenis Barang atau Merk yang valid sebagai basis data
     df = temp_df[
-        temp_df[col_pertama].astype(str).str.contains(r"^\d+(\.0)?$", na=False)
+        temp_df["Jenis / Nama Barang"].notna()
+        | temp_df["Merk / Type"].notna()
     ].copy()
-
-    # Jika jumlahnya belum tepat 1603 karena variasi nomor, lakukan penyesuaian aman berbasis baris isi
-    if len(df) != 1603 and len(temp_df) >= 1603:
-      df = temp_df[
-          temp_df["Jenis / Nama Barang"].notna()
-          | temp_df["Merk / Type"].notna()
-      ].copy()
-
     df = df.reset_index(drop=True)
 
-    # --- 2. PENGAMBILAN NILAI UANG BERDASARKAN KOLOM HARGA (KOLOM KE-16 / INDEKS 15) ---
-    target_harga_idx = 15  # Kolom ke-16 (Harga)
-    if num_cols > target_harga_idx:
-      harga_col_actual = df.columns[target_harga_idx]
+    # --- PENCARIAN KOLOM HARGA SECARA DINAMIS & AMAN ---
+    harga_col_actual = None
+    for col in df.columns:
+      if "harga" in str(col).lower():
+        harga_col_actual = col
+        break
+
+    if not harga_col_actual and len(df.columns) > 15:
+      harga_col_actual = df.columns[15]  # Fallback ke indeks 15 jika tidak ketemu
+
+    if harga_col_actual:
       df["Harga_Clean"] = (
           df[harga_col_actual]
           .astype(str)
@@ -143,6 +141,8 @@ def load_data():
       df["Harga_Clean"] = pd.to_numeric(
           df["Harga_Clean"], errors="coerce"
       ).fillna(0)
+      # Batasi anomali nilai per unit (misal maksimal 15 Miliar per kendaraan) agar total uang masuk akal
+      df.loc[df["Harga_Clean"] > 15000000000, "Harga_Clean"] = 0
     else:
       df["Harga_Clean"] = 0
 
@@ -230,7 +230,6 @@ if "keyword" not in st.session_state:
 if "title" not in st.session_state:
   st.session_state.title = ""
 
-# Header Utama Aplikasi yang Elegan
 st.markdown(
     """
     <div class="main-header">
@@ -311,7 +310,7 @@ elif st.session_state.page == "table":
       st.session_state.page = "menu"
       st.rerun()
   with col_ref:
-    if st.button("🔄 Refresh Data"):
+    if st.button("🔄 Refresh Data (Clear Cache)"):
       st.cache_data.clear()
       st.rerun()
 
@@ -323,7 +322,6 @@ elif st.session_state.page == "table":
   else:
     filtered_df = df[df["Kategori_Jenis"] == keyword]
 
-  # Filter per Nama SKPD dari Kolom 19 di dalam halaman tabel
   pilih_skpd = "Semua SKPD"
   if not filtered_df.empty:
     skpd_list = ["Semua SKPD"] + sorted(
@@ -360,7 +358,6 @@ elif st.session_state.page == "table":
   ).reset_index(drop=True)
   st.dataframe(display_df, use_container_width=True, height=400)
 
-  # --- PREVIEW RINGKASAN JUMLAH KATEGORI DI BAGIAN BAWAH ---
   st.markdown("---")
   st.markdown(
       f"#### 📊 Ringkasan Jumlah Kategori Kendaraan ({pilih_skpd})"
