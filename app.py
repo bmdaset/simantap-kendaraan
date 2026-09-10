@@ -54,28 +54,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Standar Baku Kolom KIB B Pemerintah & Data Kendaraan (STNK)
-kolom_kib_b = [
-    "No.",
-    "Kode Barang",
-    "No. Urut",
-    "Jenis / Nama Barang",
-    "No. Register",
-    "Merk / Type",
-    "Ukuran / CC",
-    "Bahan",
-    "Tahun Pembuatan",
-    "No. Pabrik",
-    "No. Rangka",
-    "No. Mesin",
-    "No. Polisi",
-    "Asal Usul",
-    "Harga (Rp)",
-    "Keterangan",
-    "Nama Pengguna",
-    "SKPD",
-]
-
 
 @st.cache_data
 def load_data():
@@ -88,29 +66,38 @@ def load_data():
       return pd.DataFrame(), None
 
   try:
-    df = pd.read_excel(
-        file_path, sheet_name="KENDARAAN DINAS", skiprows=16, header=None
+    # Deteksi baris header secara otomatis agar 100% sinkron langsung dari file Excel
+    df_raw = pd.read_excel(
+        file_path, sheet_name="KENDARAAN DINAS", header=None
     )
-    # Hapus baris dan kolom yang kosong total agar tidak terjadi pergeseran indeks
-    df = df.dropna(how="all").dropna(axis=1, how="all").reset_index(drop=True)
+    header_idx = 15
+    for idx, row in df_raw.head(25).iterrows():
+      txt = " ".join(str(v) for v in row.values).lower()
+      if "kode barang" in txt or "jenis" in txt or "merk" in txt:
+        header_idx = idx
+        break
 
-    num_cols = len(df.columns)
-    col_names = kolom_kib_b.copy()
-    for i in range(len(col_names), num_cols):
-      col_names.append(f"Kolom_{i+1}")
-    df.columns = col_names[:num_cols]
+    df = pd.read_excel(
+        file_path, sheet_name="KENDARAAN DINAS", header=header_idx
+    )
+
+    # Bersihkan nama kolom dari kolom kosong/unnamed
+    df = df.loc[:, ~df.columns.astype(str).str.contains("^Unnamed")]
+    df.columns = [str(c).strip() for c in df.columns]
+
+    df = df.dropna(how="all").reset_index(drop=True)
+
+    first_col = df.columns[0]
 
     def is_valid_row(val):
       try:
-        val_int = int(float(val))
-        return val_int > 0
+        return int(float(val)) > 0
       except:
         return False
 
-    df = df[df[df.columns[0]].apply(is_valid_row)].copy()
-    df = df.reset_index(drop=True)
+    df = df[df[first_col].apply(is_valid_row)].reset_index(drop=True)
 
-    # Pembersihan format desimal .0 / .000000 pada seluruh sel data string
+    # Pembersihan format desimal .0 pada seluruh sel data string
     for col in df.columns:
       df[col] = (
           df[col]
@@ -120,9 +107,13 @@ def load_data():
           .replace("None", "")
       )
 
-    if "SKPD" in df.columns:
+    skpd_col = next(
+        (c for c in df.columns if "skpd" in c.lower() or "dinas" in c.lower()),
+        None,
+    )
+    if skpd_col:
       df["SKPD_Nama"] = (
-          df["SKPD"]
+          df[skpd_col]
           .ffill()
           .fillna("DINAS / INSTANSI LAINNYA")
           .astype(str)
@@ -132,11 +123,13 @@ def load_data():
     else:
       df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-    target_harga_col = "Harga (Rp)"
-    if target_harga_col in df.columns:
+    harga_col = next(
+        (c for c in df.columns if "harga" in c.lower() or "rupiah" in c.lower()),
+        None,
+    )
+    if harga_col:
       df["Harga_Clean"] = pd.to_numeric(
-          df[target_harga_col].str.replace(r"[^\d.]", "", regex=True),
-          errors="coerce",
+          df[harga_col].str.replace(r"[^\d.]", "", regex=True), errors="coerce"
       ).fillna(0)
     else:
       df["Harga_Clean"] = 0
@@ -350,12 +343,10 @@ elif st.session_state.page == "table":
       f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
   )
 
-  # Membuang kolom bantu sistem serta kolom 19-21 sesuai permintaan
   columns_to_drop = [
       "Harga_Clean",
       "Kategori_Jenis",
       "SKPD_Nama",
-      "SKPD",
   ]
   display_df = filtered_df.drop(
       columns=[c for c in columns_to_drop if c in filtered_df.columns],
@@ -383,11 +374,7 @@ elif st.session_state.page == "table":
     selected_row_idx = st.selectbox(
         "Pilih Kendaraan untuk Lihat Detail Lengkap:",
         options=display_df.index,
-        format_func=lambda x: (
-            f"Baris {x+1}:"
-            f" {display_df.loc[x, 'Jenis / Nama Barang']} -"
-            f" {display_df.loc[x, 'Merk / Type']} ({display_df.loc[x, 'No. Polisi']})"
-        ),
+        format_func=lambda x: f"Baris {x+1}: {display_df.iloc[x].values[0]}",
     )
 
     if selected_row_idx is not None:
