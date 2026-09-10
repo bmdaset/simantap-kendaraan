@@ -9,7 +9,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Styling tombol agar rapi di HP
 st.markdown("""
     <style>
     .stButton>button{
@@ -22,7 +21,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Inisialisasi session state untuk navigasi tombol
 if 'keyword' not in st.session_state:
     st.session_state.keyword = ""
 if 'title' not in st.session_state:
@@ -44,7 +42,6 @@ def load_data():
 df, file_path = load_data()
 
 if df is not None:
-    # --- PEMBERSIHAN DATA BERDASARKAN NOMOR URUT ---
     kolom_no = None
     for col in df.columns:
         if 'no' in str(col).lower():
@@ -53,19 +50,30 @@ if df is not None:
     if not kolom_no:
         kolom_no = df.columns[0]
 
-    # Membuang baris kosong atau baris total agar jumlah akurat seperti Excel
     df = df.dropna(subset=[kolom_no])
     df = df[df[kolom_no].astype(str).str.strip() != '']
     df = df[~df[kolom_no].astype(str).str.lower().str.contains('jumlah|total|no', na=False)]
     df = df.reset_index(drop=True)
 
-    # Fungsi untuk menghitung total per kategori tombol
+    # Fungsi untuk mendeteksi kategori kendaraan per baris
+    def deteksi_kategori(row):
+        text = " ".join(row.fillna("").astype(str)).lower()
+        if "sepeda motor" in text or "motor" in text or "trail" in text:
+            return "Sepeda Motor"
+        elif "pick up" in text or "pickup" in text:
+            return "Pick Up"
+        elif "mobil" in text or "minibus" in text or "jeep" in text or "station wagon" in text or "sedan" in text:
+            return "Mobil"
+        else:
+            return "Lainnya"
+
+    df['Kategori_Jenis'] = df.apply(deteksi_kategori, axis=1)
+
     def hitung_total(kategori=""):
         if kategori == "":
             return len(df)
         else:
-            filtered = df[df.astype(str).apply(lambda col: col.str.lower().str.contains(kategori.lower(), na=False)).any(axis=1)]
-            return len(filtered)
+            return len(df[df['Kategori_Jenis'].str.lower() == kategori.lower()])
 
     t_semua = hitung_total("")
     t_motor = hitung_total("sepeda motor")
@@ -74,7 +82,6 @@ if df is not None:
 
     st.markdown("## 🚗 SIMANTAP - Kendaraan Dinas")
 
-    # --- MENU TOMBOL KATEGORI ---
     col1, col2 = st.columns(2)
     with col1:
         if st.button(f"🔴 SEMUA KENDARAAN\n\nTotal: {t_semua} Data", key="btn_semua"):
@@ -101,7 +108,6 @@ if df is not None:
     st.markdown("---")
     st.markdown(f"### 📋 {st.session_state.title}")
 
-    # Kolom Pencarian / Filter
     search_query = st.text_input("🔍 Cari Kendaraan (Nomor Polisi, Jenis, SKPD, dll):", value=st.session_state.keyword)
 
     filtered_df = df.copy()
@@ -111,15 +117,12 @@ if df is not None:
         ).any(axis=1)
         filtered_df = filtered_df[mask_search]
 
-    display_df = filtered_df.drop(columns=["Harga_Clean"], errors="ignore").reset_index(drop=True)
+    display_df = filtered_df.drop(columns=["Harga_Clean", "Kategori_Jenis"], errors="ignore").reset_index(drop=True)
 
-    # --- TABEL UTAMA DENGAN FORMAT GRID EXCEL ---
     st.table(display_df)
 
     st.markdown("---")
-
-    # --- REKAP JUMLAH KENDARAAN PER SKPD ---
-    st.markdown("### 📊 Rekap Jumlah Kendaraan per SKPD")
+    st.markdown("### 📊 Rekap Rinci Jumlah Kendaraan per SKPD")
     
     kolom_skpd_candidates = ['SKPD', 'Unit Kerja', 'OPD', 'Nama SKPD', 'Satuan Kerja']
     kolom_skpd = next((col for col in kolom_skpd_candidates if col in df.columns), None)
@@ -128,11 +131,28 @@ if df is not None:
         kolom_skpd = df.columns[1]
 
     if kolom_skpd:
-        rekap_skpd = df.groupby(kolom_skpd).size().reset_index(name='Jumlah Kendaraan')
-        rekap_skpd = rekap_skpd.sort_values(by='Jumlah Kendaraan', ascending=False).reset_index(drop=True)
+        # Membuat tabel pivot agar rekap memuat kolom rincian per kategori
+        rekap_skpd = pd.pivot_table(
+            df,
+            index=kolom_skpd,
+            columns='Kategori_Jenis',
+            values=kolom_no,
+            aggfunc='count',
+            fill_value=0
+        ).reset_index()
+
+        # Memastikan kolom kategori wajib selalu ada walau nilainya 0
+        for kat in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya']:
+            if kat not in rekap_skpd.columns:
+                rekap_skpd[kat] = 0
+
+        # Mengatur urutan kolom agar lebih rapi dan menambahkan kolom Total
+        kolom_tersedia = [c for c in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya'] if c in rekap_skpd.columns]
+        rekap_skpd['Total'] = rekap_skpd[kolom_tersedia].sum(axis=1)
+        rekap_skpd = rekap_skpd.sort_values(by='Total', ascending=False).reset_index(drop=True)
+
         st.table(rekap_skpd)
     else:
         st.warning("Kolom SKPD tidak terdeteksi otomatis di file Excel.")
-
 else:
     st.error("File Excel 'REKAP KENDARAAN TA. 2026.YP.xlsx' tidak ditemukan di repositori.")
