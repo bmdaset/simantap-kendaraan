@@ -11,12 +11,13 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    .stButton>button{
+    .stButton>button {
         width: 100%;
         border-radius: 8px;
         font-weight: bold;
-        padding: 12px;
-        font-size: 14px;
+        padding: 10px;
+        color: white;
+        border: none;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -29,23 +30,38 @@ if 'title' not in st.session_state:
 @st.cache_data
 def load_data():
     file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
-    if os.path.exists(file_path):
-        df = pd.read_excel(file_path)
-        return df, file_path
-    else:
+    if not os.path.exists(file_path):
         files = glob.glob("*.xlsx")
         if files:
-            df = pd.read_excel(files[0])
-            return df, files[0]
-        return None, None
+            file_path = files[0]
+        else:
+            return None, None
+    
+    # Deteksi baris header secara otomatis untuk menghilangkan 'Unnamed'
+    df_raw = pd.read_excel(file_path, header=None)
+    header_row = 0
+    for idx, row in df_raw.head(15).iterrows():
+        row_str = " ".join(row.fillna("").astype(str)).lower()
+        if "no" in row_str and any(k in row_str for k in ["jenis", "merek", "skpd", "kode", "nopol", "polisi"]):
+            header_row = idx
+            break
+    
+    df = pd.read_excel(file_path, header=header_row)
+    return df, file_path
 
 df, file_path = load_data()
 
 if df is not None:
-    # Cari kolom nomor atau ID
+    # Bersihkan nama kolom dari spasi berlebih
+    df.columns = [str(c).strip() for c in df.columns]
+    
+    # Hapus kolom kosong atau yang bernama Unnamed
+    df = df.loc[:, ~df.columns.str.contains('^Unnamed', na=False)]
+
+    # Cari kolom nomor
     kolom_no = None
     for col in df.columns:
-        if 'no' in str(col).lower():
+        if 'no' in str(col).lower() and len(str(col)) < 10:
             kolom_no = col
             break
     if not kolom_no:
@@ -56,125 +72,127 @@ if df is not None:
     df = df[~df[kolom_no].astype(str).str.lower().str.contains('jumlah|total|no', na=False)]
     df = df.reset_index(drop=True)
 
-    # Deteksi kolom SKPD secara akurat berdasarkan kemunculan nama instansi terbanyak
+    # Cari kolom SKPD secara akurat
     skpd_col = None
-    max_skpd_count = 0
     for col in df.columns:
-        try:
-            col_lower = df[col].dropna().astype(str).str.lower()
-            count = col_lower.str.contains('dinas|badan|sekretariat|kecamatan|rsud|inspektorat|biro|satpol', na=False).sum()
-            if count > max_skpd_count:
-                max_skpd_count = count
-                skpd_col = col
-        except:
-            pass
-
+        col_lower = str(col).lower()
+        if any(k in col_lower for k in ['skpd', 'unit', 'opd', 'dinas', 'instansi']):
+            skpd_col = col
+            break
     if not skpd_col:
-        if len(df.columns) > 18:
-            skpd_col = df.columns[18]
-        else:
-            skpd_col = df.columns[min(1, len(df.columns)-1)]
+        for col in df.columns:
+            try:
+                sample_text = " ".join(df[col].dropna().astype(str).str.lower().head(10))
+                if any(kw in sample_text for kw in ['dinas', 'badan', 'sekretariat', 'kecamatan', 'rsud', 'pemerintah']):
+                    skpd_col = col
+                    break
+            except:
+                pass
+    if not skpd_col:
+        skpd_col = df.columns[min(2, len(df.columns)-1)]
 
-    # Deteksi Kategori Kendaraan yang akurat
+    # Kategori Kendaraan
     def deteksi_kategori(row):
         text = " ".join(row.fillna("").astype(str)).lower()
         if "pick up" in text or "pickup" in text or "bak terbuka" in text:
             return "Pick Up"
-        elif "sepeda motor" in text or "roda dua" in text or "trail" in text or "matic" in text or "klx" in text or "crf" in text or "bebek" in text or "scoopy" in text or "beat" in text or "vario" in text or "mio" in text:
+        elif any(k in text for k in ["sepeda motor", "roda dua", "trail", "matic", "klx", "crf", "bebek", "scoopy", "beat", "vario", "mio"]):
             return "Sepeda Motor"
-        elif "mobil" in text or "minibus" in text or "station wagon" in text or "stationwagon" in text or "jeep" in text or "sedan" in text or "bus" in text or "truk" in text or "truck" in text or "doka" in text or "double cabin" in text or "suv" in text or "mpv" in text or "pemadam" in text:
+        elif any(k in text for k in ["mobil", "minibus", "station", "jeep", "sedan", "bus", "truk", "truck", "doka", "double", "suv", "mpv", "pemadam", "ambulance"]):
             return "Mobil"
         else:
             return "Lainnya"
 
     df['Kategori_Jenis'] = df.apply(deteksi_kategori, axis=1)
 
-    def hitung_total(kategori=""):
-        if kategori == "":
-            return len(df)
-        else:
-            return len(df[df['Kategori_Jenis'].str.lower() == kategori.lower()])
+    t_semua = len(df)
+    t_motor = len(df[df['Kategori_Jenis'] == "Sepeda Motor"])
+    t_mobil = len(df[df['Kategori_Jenis'] == "Mobil"])
+    t_pickup = len(df[df['Kategori_Jenis'] == "Pick Up"])
 
-    t_semua = hitung_total("")
-    t_motor = hitung_total("sepeda motor")
-    t_mobil = hitung_total("mobil")
-    t_pickup = hitung_total("pick up")
+    # Header Kompak & Berwarna
+    st.markdown("<h3 style='margin-bottom: 0px;'>🚗 SIMANTAP - Kendaraan Dinas</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='color: gray; font-size: 13px; margin-bottom: 15px;'>Sistem Informasi Manajemen Aset & Kendaraan Dinas</p>", unsafe_allow_html=True)
 
-    st.markdown("## 🚗 SIMANTAP - Kendaraan Dinas")
-
-    col1, col2 = st.columns(2)
+    # Tombol Filter Kategori Berwarna & Sebaris (Hemat Tempat)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        if st.button(f"🔴 SEMUA KENDARAAN\n\nTotal: {t_semua} Data", key="btn_semua"):
+        if st.button(f"🔴 Semua Data\n({t_semua})", key="b_semua"):
             st.session_state.keyword = ""
-            st.session_state.title = "Semua Kendaraan Dinas"
+            st.session_state.title = "Semua Kendaraan"
             st.rerun()
-        
-        if st.button(f"🟡 MOBIL\n\nTotal: {t_mobil} Data", key="btn_mobil"):
-            st.session_state.keyword = "mobil"
-            st.session_state.title = "Data Kendaraan Mobil"
-            st.rerun()
-
     with col2:
-        if st.button(f"🟢 SEPEDA MOTOR\n\nTotal: {t_motor} Data", key="btn_motor"):
+        if st.button(f"🟡 Mobil\n({t_mobil})", key="b_mobil"):
+            st.session_state.keyword = "mobil"
+            st.session_state.title = "Kendaraan Mobil"
+            st.rerun()
+    with col3:
+        if st.button(f"🟢 Sepeda Motor\n({t_motor})", key="b_motor"):
             st.session_state.keyword = "sepeda motor"
-            st.session_state.title = "Data Sepeda Motor"
+            st.session_state.title = "Kendaraan Sepeda Motor"
             st.rerun()
-
-        if st.button(f"🔵 PICK UP\n\nTotal: {t_pickup} Data", key="btn_pickup"):
+    with col4:
+        if st.button(f"🔵 Pick Up\n({t_pickup})", key="b_pickup"):
             st.session_state.keyword = "pick up"
-            st.session_state.title = "Data Pick Up"
+            st.session_state.title = "Kendaraan Pick Up"
             st.rerun()
 
     st.markdown("---")
-    st.markdown(f"### 📋 {st.session_state.title}")
 
-    search_query = st.text_input("🔍 Cari Kendaraan (Nomor Polisi, Jenis, SKPD, dll):", value=st.session_state.keyword)
+    # Layout Menggunakan Tab agar Bersih dan Tidak Panjang Ke Bawah
+    tab1, tab2 = st.tabs(["📋 Tabel Data Kendaraan", "📊 Rekap Rinci per SKPD"])
 
-    filtered_df = df.copy()
-    if search_query:
-        mask_search = filtered_df.astype(str).apply(
-            lambda col: col.str.lower().str.contains(search_query.lower(), na=False)
-        ).any(axis=1)
-        filtered_df = filtered_df[mask_search]
+    with tab1:
+        c_f1, c_f2 = st.columns([2, 2])
+        with c_f1:
+            daftar_skpd = ["Semua SKPD"] + sorted([str(x) for x in df[skpd_col].dropna().unique() if str(x).strip() != ''])
+            pilih_skpd_main = st.selectbox("Filter berdasarkan SKPD:", daftar_skpd, key="skpd_main_filter")
+        with c_f2:
+            search_query = st.text_input("Cari cepat:", value=st.session_state.keyword, placeholder="Ketik No Polisi atau Jenis...")
 
-    display_df = filtered_df.drop(columns=["Harga_Clean", "Kategori_Jenis"], errors="ignore").reset_index(drop=True)
-    st.table(display_df)
+        df_filtered = df.copy()
+        if pilih_skpd_main != "Semua SKPD":
+            df_filtered = df_filtered[df_filtered[skpd_col].astype(str).str.strip() == pilih_skpd_main]
 
-    st.markdown("---")
-    st.markdown("### 📊 Rekap Rinci Jumlah Kendaraan per SKPD")
+        if search_query:
+            mask = df_filtered.astype(str).apply(lambda col: col.str.lower().str.contains(search_query.lower(), na=False)).any(axis=1)
+            df_filtered = df_filtered[mask]
 
-    try:
-        df_rekap = df.copy()
-        df_rekap[skpd_col] = df_rekap[skpd_col].fillna("").astype(str).str.strip()
-        df_rekap = df_rekap[df_rekap[skpd_col] != '']
+        display_df = df_filtered.drop(columns=["Kategori_Jenis"], errors="ignore").reset_index(drop=True)
+        st.dataframe(display_df, use_container_width=True, height=380)
 
-        rekap_skpd = pd.pivot_table(
-            df_rekap,
-            index=skpd_col,
-            columns='Kategori_Jenis',
-            values=kolom_no,
-            aggfunc='count',
-            fill_value=0
-        ).reset_index()
+    with tab2:
+        try:
+            df_rekap = df.copy()
+            df_rekap[skpd_col] = df_rekap[skpd_col].fillna("").astype(str).str.strip()
+            df_rekap = df_rekap[df_rekap[skpd_col] != '']
 
-        for kat in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya']:
-            if kat not in rekap_skpd.columns:
-                rekap_skpd[kat] = 0
+            rekap_skpd = pd.pivot_table(
+                df_rekap,
+                index=skpd_col,
+                columns='Kategori_Jenis',
+                values=kolom_no,
+                aggfunc='count',
+                fill_value=0
+            ).reset_index()
 
-        kolom_tersedia = [c for c in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya'] if c in rekap_skpd.columns]
-        rekap_skpd['Total'] = rekap_skpd[kolom_tersedia].sum(axis=1)
-        rekap_skpd = rekap_skpd.sort_values(by='Total', ascending=False).reset_index(drop=True)
-        
-        rekap_skpd = rekap_skpd.rename(columns={skpd_col: "NAMA SKPD / UNIT KERJA"})
+            for kat in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya']:
+                if kat not in rekap_skpd.columns:
+                    rekap_skpd[kat] = 0
 
-        daftar_skpd = ["Semua SKPD"] + list(rekap_skpd["NAMA SKPD / UNIT KERJA"].unique())
-        pilih_skpd = st.selectbox("🔍 Pilih Nama SKPD untuk Ditampilkan:", daftar_skpd)
+            cols_exist = [c for c in ['Mobil', 'Sepeda Motor', 'Pick Up', 'Lainnya'] if c in rekap_skpd.columns]
+            rekap_skpd['Total'] = rekap_skpd[cols_exist].sum(axis=1)
+            rekap_skpd = rekap_skpd.sort_values(by='Total', ascending=False).reset_index(drop=True)
+            rekap_skpd = rekap_skpd.rename(columns={skpd_col: "NAMA SKPD / UNIT KERJA"})
 
-        if pilih_skpd != "Semua SKPD":
-            rekap_skpd = rekap_skpd[rekap_skpd["NAMA SKPD / UNIT KERJA"] == pilih_skpd]
+            daftar_skpd_rekap = ["Semua SKPD"] + list(rekap_skpd["NAMA SKPD / UNIT KERJA"].unique())
+            pilih_skpd_rekap = st.selectbox("Filter Rekap SKPD:", daftar_skpd_rekap, key="skpd_rekap_filter")
 
-        st.table(rekap_skpd)
-    except Exception as e:
-        st.error(f"Terjadi kesalahan saat memuat rekap: {e}")
+            if pilih_skpd_rekap != "Semua SKPD":
+                rekap_skpd = rekap_skpd[rekap_skpd["NAMA SKPD / UNIT KERJA"] == pilih_skpd_rekap]
+
+            st.dataframe(rekap_skpd, use_container_width=True, height=380)
+        except Exception as e:
+            st.error(f"Gagal memuat rekap: {e}")
 else:
-    st.error("File Excel 'REKAP KENDARAAN TA. 2026.YP.xlsx' tidak ditemukan.")
+    st.error("File Excel tidak ditemukan.")
