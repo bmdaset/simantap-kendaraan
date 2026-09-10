@@ -9,15 +9,42 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# Custom CSS untuk mempercantik Tampilan / UI Dashboard
 st.markdown(
     """
     <style>
+    .main-header {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        padding: 30px;
+        border-radius: 12px;
+        color: white;
+        text-align: center;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    }
+    .main-header h2 {
+        margin: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+    }
+    .main-header p {
+        margin: 8px 0 0 0;
+        font-size: 15px;
+        opacity: 0.85;
+    }
     .stButton>button {
         width: 100%;
         border-radius: 8px;
-        font-weight: bold;
-        padding: 15px;
-        font-size: 14px;
+        font-weight: 600;
+        padding: 14px;
+        font-size: 15px;
+        transition: all 0.3s ease;
+        border: none;
+    }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.12);
     }
     </style>
 """,
@@ -107,7 +134,6 @@ def load_data():
 
     # Klasifikasi Kategori Kendaraan Berdasarkan Database Excel secara Menyeluruh
     def deteksi_kategori(row):
-      # Menggabungkan seluruh teks dalam baris untuk mendeteksi kata kunci dari database
       combined = " ".join(
           [str(val) for val in row.values if pd.notna(val)]
       ).lower()
@@ -190,10 +216,12 @@ if "keyword" not in st.session_state:
 if "title" not in st.session_state:
   st.session_state.title = ""
 
+# Header Utama Aplikasi yang Elegan
 st.markdown(
     """
-    <div style="background-color:#2c3e50;padding:15px;border-radius:6px;text-align:center;margin-bottom:20px;">
-        <h3 style="color:white;margin:0;font-family:Segoe UI;">SISTEM INFORMASI MANAJEMEN ASET - KENDARAAN DINAS (SIMANTAP)</h3>
+    <div class="main-header">
+        <h2>🚗 SIMANTAP - KENDARAAN DINAS</h2>
+        <p>Sistem Informasi Manajemen Aset & Inventaris Kendaraan Pemerintah Daerah</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -201,57 +229,66 @@ st.markdown(
 
 if st.session_state.page == "menu":
   st.markdown(
-      "<h4 style='text-align:center; color:#2c3e50;'>Silakan Pilih Menu Kategori"
-      " Aset:</h4>",
+      "<h4 style='text-align:center; color:#34495e; margin-bottom:25px;'>Silakan"
+      " Pilih Kategori Aset Kendaraan</h4>",
       unsafe_allow_html=True,
   )
-  st.write("")
 
   p_semua, t_semua = hitung_total("")
   p_motor, t_motor = hitung_total("Sepeda Motor")
   p_mobil, t_mobil = hitung_total("Mobil")
   p_pickup, t_pickup = hitung_total("Pick Up")
 
-  col1, col2 = st.columns(2)
+  col1, col2 = st.columns(2, gap="medium")
 
   with col1:
-    if st.button(
-        f"📦 SEMUA KENDARAAN\n\nTotal: {t_semua} Data\nNilai: {p_semua}",
-        key="btn_semua",
-    ):
-      st.session_state.keyword = ""
-      st.session_state.title = "Semua Kendaraan Dinas"
-      st.session_state.page = "table"
-      st.rerun()
+    with st.container(border=True):
+      st.markdown("### 📦 *Semua Kendaraan*")
+      st.write(
+          f"Total Unit: *{t_semua:,} Data\n\nTotal Nilai Aset: *{p_semua}**"
+      )
+      if st.button("Kelola Semua Kendaraan", key="btn_semua"):
+        st.session_state.keyword = ""
+        st.session_state.title = "Semua Kendaraan Dinas"
+        st.session_state.page = "table"
+        st.rerun()
 
     st.write("")
-    if st.button(
-        f"🚗 MOBIL\n\nTotal: {t_mobil} Data\nNilai: {p_mobil}", key="btn_mobil"
-    ):
-      st.session_state.keyword = "Mobil"
-      st.session_state.title = "Mobil"
-      st.session_state.page = "table"
-      st.rerun()
+    with st.container(border=True):
+      st.markdown("### 🚗 *Mobil*")
+      st.write(
+          f"Total Unit: *{t_mobil:,} Data\n\nTotal Nilai Aset: *{p_mobil}**"
+      )
+      if st.button("Kelola Data Mobil", key="btn_mobil"):
+        st.session_state.keyword = "Mobil"
+        st.session_state.title = "Mobil"
+        st.session_state.page = "table"
+        st.rerun()
 
   with col2:
-    if st.button(
-        f"🏍️ SEPEDA MOTOR\n\nTotal: {t_motor} Data\nNilai: {p_motor}",
-        key="btn_motor",
-    ):
-      st.session_state.keyword = "Sepeda Motor"
-      st.session_state.title = "Sepeda Motor"
-      st.session_state.page = "table"
-      st.rerun()
+    with st.container(border=True):
+      st.markdown("### 🏍️ *Sepeda Motor*")
+      st.write(
+          f"Total Unit: *{t_motor:,} Data\n\nTotal Nilai Aset: *{p_motor}**"
+      )
+      if st.button("Kelola Sepeda Motor", key="btn_motor"):
+        st.session_state.keyword = "Sepeda Motor"
+        st.session_state.title = "Sepeda Motor"
+        st.session_state.page = "table"
+        st.rerun()
 
     st.write("")
-    if st.button(
-        f"🚙 PICK UP\n\nTotal: {t_pickup} Data\nNilai: {p_pickup}",
-        key="btn_pickup",
-    ):
-      st.session_state.keyword = "Pick Up"
-      st.session_state.title = "Pick Up"
-      st.session_state.page = "table"
-      st.rerun()
+    with st.container(border=True):
+      st.markdown("### 🚙 *Pick Up*")
+      st.write(
+          f"Total Unit: *{t_pickup:,} Data*\n\nTotal Nilai Aset:"
+          f" *{p_pickup}*"
+      )
+      if st.button("Kelola Pick Up", key="btn_pickup"):
+        st.session_state.keyword = "Pick Up"
+        st.session_state.title = "Pick Up"
+        st.session_state.page = "table"
+        st.rerun()
 
 elif st.session_state.page == "table":
   col_back, col_ref, col_title = st.columns([1.5, 1.5, 5])
