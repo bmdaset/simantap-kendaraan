@@ -1,5 +1,9 @@
+from io import BytesIO
 import glob
 import os
+from fpdf import FPDF
+import openpyxl
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 import pandas as pd
 import streamlit as st
 
@@ -82,7 +86,6 @@ def load_data():
       return pd.DataFrame(), None
 
   try:
-    # Membaca data langsung mulai dari baris ke-16 Excel (indeks 16) secara stabil
     df = pd.read_excel(
         file_path, sheet_name="KENDARAAN DINAS", skiprows=16, header=None
     )
@@ -94,8 +97,6 @@ def load_data():
       col_names.append(f"Kolom_{i+1}")
     df.columns = col_names[:num_cols]
 
-    # Filter baris valid: Kolom pertama harus berupa angka nomor urut (> 0)
-    # Otomatis membuang baris 'JUMLAH TOTAL' dan baris kosong di bawah
     def is_valid_row(val):
       try:
         val_int = int(float(val))
@@ -106,7 +107,6 @@ def load_data():
     df = df[df[df.columns[0]].apply(is_valid_row)].copy()
     df = df.reset_index(drop=True)
 
-    # Ambil Nama SKPD mutlak dari Kolom ke-19 (Indeks 18)
     if num_cols >= 19:
       skpd_col_name = df.columns[18]
       df["SKPD_Nama"] = (
@@ -120,7 +120,6 @@ def load_data():
     else:
       df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-    # Ambil Harga dari Kolom ke-16 (Indeks 15)
     target_harga_idx = 15
     if num_cols > target_harga_idx:
       harga_col_actual = df.columns[target_harga_idx]
@@ -130,7 +129,6 @@ def load_data():
     else:
       df["Harga_Clean"] = 0
 
-    # Klasifikasi Kategori Kendaraan Otomatis
     def deteksi_kategori(row):
       combined = " ".join(
           [str(val) for val in row.values if pd.notna(val)]
@@ -357,7 +355,7 @@ elif st.session_state.page == "table":
     st.info("Tidak ada data untuk kategori ini.")
 
   st.markdown("---")
-  st.markdown("#### 🔍 Detail Data Satuan & Download")
+  st.markdown("#### 🔍 Preview Kartu Detail Bergaris & Download")
   if not display_df.empty:
     selected_row_idx = st.selectbox(
         "Pilih Kendaraan untuk Lihat Detail Lengkap:",
@@ -375,29 +373,114 @@ elif st.session_state.page == "table":
       values_list = [row_data[col] for col in columns_list]
 
       detail_df = pd.DataFrame({
-          "Nama Kolom / Atribut": columns_list,
-          "Isi / Data Kendaraan": values_list,
+          "Atribut / Kolom Data": columns_list,
+          "Keterangan / Isi Data": values_list,
       })
-      st.table(detail_df)
 
-      col_e1, col_e2 = st.columns(2)
+      # --- PREVIEW BERGARIS PADA LAYAR ---
+      styled_preview = (
+          detail_df.style.set_table_styles([
+              {
+                  "selector": "th",
+                  "props": [
+                      ("background-color", "#1e3c72"),
+                      ("color", "white"),
+                      ("font-weight", "bold"),
+                      ("border", "1px solid black"),
+                      ("text-align", "center"),
+                  ],
+              },
+              {
+                  "selector": "td",
+                  "props": [
+                      ("border", "1px solid #b0b0b0"),
+                      ("padding", "6px 10px"),
+                  ],
+              },
+          ])
+          .set_properties(**{"text-align": "left"})
+          .hide(axis="index")
+      )
+
+      st.markdown(
+          "<p style='font-weight:600; color:#1e3c72;'>Preview Tabel"
+          " Bergaris:</p>",
+          unsafe_allow_html=True,
+      )
+      st.dataframe(styled_preview, use_container_width=True, height=450)
+
+      col_e1, col_e2, col_e3 = st.columns(3)
+
+      # 1. Download Excel Styled Vertical Card
       with col_e1:
 
-        def convert_df_to_excel(d_df):
-          from io import BytesIO
-
+        def create_styled_vertical_excel(cols, vals):
+          card_df = pd.DataFrame(
+              {"Atribut / Kolom Data": cols, "Keterangan / Isi Data": vals}
+          )
           output = BytesIO()
           with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            d_df.to_excel(writer, index=False, sheet_name="Detail")
-          return output.getvalue()
+            card_df.to_excel(writer, index=False, sheet_name="Detail Kendaraan")
 
-        excel_data = convert_df_to_excel(detail_df)
+          output.seek(0)
+          wb = openpyxl.load_workbook(output)
+          ws = wb.active
+
+          thin_border = Border(
+              left=Side(style="thin", color="888888"),
+              right=Side(style="thin", color="888888"),
+              top=Side(style="thin", color="888888"),
+              bottom=Side(style="thin", color="888888"),
+          )
+          header_fill = PatternFill(
+              start_color="1E3C72", end_color="1E3C72", fill_type="solid"
+          )
+          header_font = Font(
+              name="Calibri", size=11, bold=True, color="FFFFFF"
+          )
+          fill_even = PatternFill(
+              start_color="F9FAFB", end_color="F9FAFB", fill_type="solid"
+          )
+
+          for col_idx in range(1, 3):
+            cell = ws.cell(row=1, column=col_idx)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(
+                horizontal="center", vertical="center", wrap_text=True
+            )
+            cell.border = Border(
+                left=Side(style="thin", color="000000"),
+                right=Side(style="thin", color="000000"),
+                top=Side(style="thin", color="000000"),
+                bottom=Side(style="thin", color="000000"),
+            )
+
+          for row_idx in range(2, ws.max_row + 1):
+            is_even = row_idx % 2 == 0
+            for col_idx in range(1, 3):
+              cell = ws.cell(row=row_idx, column=col_idx)
+              cell.border = thin_border
+              cell.alignment = Alignment(vertical="center", wrap_text=True)
+              if is_even:
+                cell.fill = fill_even
+
+          ws.column_dimensions["A"].width = 30
+          ws.column_dimensions["B"].width = 50
+
+          final_output = BytesIO()
+          wb.save(final_output)
+          return final_output.getvalue()
+
+        excel_data = create_styled_vertical_excel(columns_list, values_list)
         st.download_button(
-            label="📊 Download Excel Detail",
+            label="📊 Download Excel Bergaris",
             data=excel_data,
             file_name=f"Detail_Kendaraan_{selected_row_idx+1}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
+      # 2. Download CSV Detail
       with col_e2:
         csv_data = detail_df.to_csv(index=False).encode("utf-8")
         st.download_button(
@@ -406,3 +489,70 @@ elif st.session_state.page == "table":
             file_name=f"Detail_Kendaraan_{selected_row_idx+1}.csv",
             mime="text/csv",
         )
+
+      # 3. Download & Preview PDF Detail
+      with col_e3:
+
+        def create_pdf_detail(cols, vals):
+          pdf = FPDF(orientation="P", unit="mm", format="A4")
+          pdf.add_page()
+
+          # Header Title
+          pdf.set_font("Arial", "B", 14)
+          pdf.set_text_color(30, 60, 114)
+          pdf.cell(
+              0, 10, "DETAIL INFORMASI ASET KENDARAAN DINAS", 0, 1, "C"
+          )
+          pdf.ln(4)
+
+          pdf.set_font("Arial", "B", 10)
+          pdf.set_fill_color(30, 60, 114)
+          pdf.set_text_color(255, 255, 255)
+
+          pdf.cell(70, 7, "Atribut / Kolom Data", 1, 0, "C", True)
+          pdf.cell(120, 7, "Keterangan / Isi Data", 1, 1, "C", True)
+
+          pdf.set_font("Arial", "", 9)
+          pdf.set_text_color(0, 0, 0)
+
+          fill = False
+          for col, val in zip(cols, vals):
+            if fill:
+              pdf.set_fill_color(240, 244, 248)
+            else:
+              pdf.set_fill_color(255, 255, 255)
+
+            col_str = str(col or "")
+            val_str = str(val or "")
+
+            pdf.cell(70, 6, col_str, 1, 0, "L", True)
+            pdf.cell(120, 6, val_str, 1, 1, "L", True)
+            fill = not fill
+
+          output_pdf = pdf.output(dest="S")
+          if isinstance(output_pdf, (bytes, bytearray)):
+            return bytes(output_pdf)
+          else:
+            return output_pdf.encode("latin1")
+
+        pdf_bytes = create_pdf_detail(columns_list, values_list)
+
+        st.download_button(
+            label="📑 Download PDF Bergaris",
+            data=pdf_bytes,
+            file_name=f"Detail_Kendaraan_{selected_row_idx+1}.pdf",
+            mime="application/pdf",
+        )
+
+      # Preview PDF menggunakan tag iframe agar langsung terlihat di layar
+      st.markdown("---")
+      st.markdown(
+          "<p style='font-weight:600; color:#1e3c72;'>Preview Dokumen"
+          " PDF:</p>",
+          unsafe_allow_html=True,
+      )
+      import base64
+
+      base64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+      pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="500px" type="application/pdf"></iframe>'
+      st.markdown(pdf_display, unsafe_allow_html=True)
