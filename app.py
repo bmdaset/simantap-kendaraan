@@ -10,7 +10,7 @@ import streamlit as st
 st.set_page_config(
     page_title="SIMANTAP - Kendaraan Dinas",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 st.markdown(
@@ -54,64 +54,125 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-kolom_kib_b = [
-    "No.",
-    "Kode Lokasi",
-    "No. Urut",
-    "Kode Barang",
-    "Jenis / Nama Barang",
-    "No. Register",
-    "Merk / Type",
-    "Ukuran / CC",
-    "Bahan",
-    "Tahun Pembuatan",
-    "No. Pabrik",
-    "No. Rangka",
-    "No. Mesin",
-    "No. Polisi",
-    "Asal Usul",
-    "Harga (Rp)",
-    "Keterangan",
-]
+# Sidebar untuk Upload File Excel & Clear Cache
+st.sidebar.title("📁 Pengaturan Database")
+uploaded_file = st.sidebar.file_uploader(
+    "Upload / Ganti File Excel KIB B:", type=["xlsx", "xls"]
+)
+
+if st.sidebar.button("🔄 Bersihkan Cache & Muat Ulang"):
+  st.cache_data.clear()
+  st.rerun()
 
 
 @st.cache_data
-def load_data():
-  file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
-  if not os.path.exists(file_path):
-    all_excel = glob.glob(".xlsx") + glob.glob(".xls")
-    if all_excel:
-      file_path = all_excel[0]
-    else:
-      return pd.DataFrame(), None
-
+def load_data_from_bytes(file_bytes, file_name_str):
   try:
+    source = BytesIO(file_bytes)
+    xl = pd.ExcelFile(source)
+    sheet_names = xl.sheet_names
+
+    target_sheet = sheet_names[0]
+    for s in sheet_names:
+      if "kendaraan" in s.lower() or "b" in s.lower():
+        target_sheet = s
+        break
+
+    # Baca file mentah untuk mencari baris header yang tepat
+    df_raw = pd.read_excel(
+        BytesIO(file_bytes), sheet_name=target_sheet, header=None
+    )
+    header_row_idx = 0
+    for idx, row in df_raw.iterrows():
+      row_str = " ".join([str(v) for v in row.values if pd.notna(v)]).lower()
+      if "no" in row_str and (
+          "barang" in row_str or "jenis" in row_str or "register" in row_str
+      ):
+        header_row_idx = idx
+        break
+
+    # Baca Excel dengan header tepat pada baris yang ditemukan
     df = pd.read_excel(
-        file_path, sheet_name="KENDARAAN DINAS", skiprows=16, header=None
+        BytesIO(file_bytes), sheet_name=target_sheet, header=header_row_idx
     )
     df = df.dropna(how="all").reset_index(drop=True)
 
-    num_cols = len(df.columns)
-    col_names = kolom_kib_b.copy()
-    for i in range(len(col_names), num_cols):
-      col_names.append(f"Kolom_{i+1}")
-    df.columns = col_names[:num_cols]
+    # Bersihkan nama kolom dari spasi/karakter tersembunyi
+    df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
 
-    # Ubah nama Kolom 18 dan Kolom 19
+    # Petakan nama kolom agar sesuai standar KIB B secara fleksibel
+    rename_map = {}
+    for col in df.columns:
+      col_low = col.lower()
+      if "no." in col_low and "urut" in col_low:
+        rename_map[col] = "No. Urut"
+      elif "kode" in col_low and "lokasi" in col_low:
+        rename_map[col] = "Kode Lokasi"
+      elif "kode" in col_low and "barang" in col_low:
+        rename_map[col] = "Kode Barang"
+      elif (
+          "jenis" in col_low
+          or "nama barang" in col_low
+          or "barang" in col_low
+      ):
+        if "kode" not in col_low:
+          rename_map[col] = "Jenis / Nama Barang"
+      elif "register" in col_low:
+        rename_map[col] = "No. Register"
+      elif "merk" in col_low or "type" in col_low:
+        rename_map[col] = "Merk / Type"
+      elif "ukuran" in col_low or "cc" in col_low:
+        rename_map[col] = "Ukuran / CC"
+      elif "bahan" in col_low:
+        rename_map[col] = "Bahan"
+      elif "tahun" in col_low and "buat" in col_low:
+        rename_map[col] = "Tahun Pembuatan"
+      elif "pabrik" in col_low:
+        rename_map[col] = "No. Pabrik"
+      elif "rangka" in col_low:
+        rename_map[col] = "No. Rangka"
+      elif "mesin" in col_low:
+        rename_map[col] = "No. Mesin"
+      elif "polisi" in col_low:
+        rename_map[col] = "No. Polisi"
+      elif "asal" in col_low:
+        rename_map[col] = "Asal Usul"
+      elif "harga" in col_low or "rp" in col_low:
+        rename_map[col] = "Harga (Rp)"
+      elif "keterangan" in col_low:
+        rename_map[col] = "Keterangan"
+
+    df = df.rename(columns=rename_map)
+
+    # Deteksi kolom SKPD / Nama Pengguna di kolom terakhir jika ada
+    num_cols = len(df.columns)
     if num_cols >= 18:
       df = df.rename(columns={df.columns[17]: "Nama Pengguna"})
     if num_cols >= 19:
       df = df.rename(columns={df.columns[18]: "SKPD"})
 
+    # Filter baris berdasarkan nomor urut valid di kolom pertama
     def is_valid_row(val):
       try:
-        val_int = int(float(val))
+        val_str = str(val).strip()
+        val_int = int(float(val_str))
         return val_int > 0
       except:
         return False
 
-    df = df[df[df.columns[0]].apply(is_valid_row)].copy()
-    df = df.reset_index(drop=True)
+    first_col = df.columns[0]
+    if not df.empty:
+      df = df[df[first_col].apply(is_valid_row)].copy()
+      df = df.reset_index(drop=True)
+
+    # Bersihkan format angka/tahun dari buntut desimal .000000
+    for col in df.columns:
+      df[col] = (
+          df[col]
+          .astype(str)
+          .str.replace(r"\.0+$", "", regex=True)
+          .replace("nan", "")
+      )
 
     if "SKPD" in df.columns:
       df["SKPD_Nama"] = (
@@ -125,15 +186,26 @@ def load_data():
     else:
       df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-    target_harga_idx = 15
-    if num_cols > target_harga_idx:
-      harga_col_actual = df.columns[target_harga_idx]
-      df["Harga_Clean"] = pd.to_numeric(
-          df[harga_col_actual], errors="coerce"
-      ).fillna(0)
+    # Bersihkan kolom Harga untuk perhitungan
+    harga_col_name = "Harga (Rp)" if "Harga (Rp)" in df.columns else None
+    if not harga_col_name:
+      for c in df.columns:
+        if "harga" in c.lower() or "rp" in c.lower():
+          harga_col_name = c
+          break
+
+    if harga_col_name:
+      df["Harga_Clean"] = (
+          pd.to_numeric(
+              df[harga_col_name].str.replace(r"[^\d.]", "", regex=True),
+              errors="coerce",
+          )
+          .fillna(0)
+      )
     else:
       df["Harga_Clean"] = 0
 
+    # Deteksi Kategori Kendaraan otomatis
     def deteksi_kategori(row):
       combined = " ".join(
           [str(val) for val in row.values if pd.notna(val)]
@@ -183,15 +255,28 @@ def load_data():
       else:
         return "Lainnya"
 
-    df["Kategori_Jenis"] = df.apply(deteksi_kategori, axis=1)
+    df["Kategori_Jenis"] = (
+        df.apply(deteksi_kategori, axis=1) if not df.empty else []
+    )
 
-    return df, file_path
+    return df, file_name_str
   except Exception as e:
-    print("Error:", e)
+    st.error(f"Terjadi kesalahan saat membaca file: {e}")
     return pd.DataFrame(), None
 
 
-df, file_path = load_data()
+# Load data based on uploaded file or local file
+if uploaded_file is not None:
+  file_bytes = uploaded_file.getvalue()
+  df, file_path = load_data_from_bytes(file_bytes, uploaded_file.name)
+else:
+  all_excel = glob.glob(".xlsx") + glob.glob(".xls")
+  if all_excel:
+    with open(all_excel[0], "rb") as f:
+      file_bytes = f.read()
+    df, file_path = load_data_from_bytes(file_bytes, all_excel[0])
+  else:
+    df, file_path = pd.DataFrame(), None
 
 
 def format_rupiah(nilai):
@@ -227,7 +312,13 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if st.session_state.page == "menu":
+if df.empty:
+  st.warning(
+      "📂 *Silakan upload file Excel kendaraan Anda* melalui panel di sidebar"
+      " sebelah kiri (atau pastikan file Excel sudah ada di repository"
+      " GitHub)."
+  )
+elif st.session_state.page == "menu":
   st.markdown(
       "<h4 style='text-align:center; color:#34495e; margin-bottom:25px;'>Silakan"
       " Pilih Kategori Aset Kendaraan</h4>",
@@ -310,7 +401,7 @@ elif st.session_state.page == "table":
     filtered_df = df[df["Kategori_Jenis"] == keyword]
 
   pilih_skpd = "Semua SKPD"
-  if not filtered_df.empty:
+  if not filtered_df.empty and "SKPD_Nama" in filtered_df.columns:
     skpd_list = ["Semua SKPD"] + sorted(
         list(filtered_df["SKPD_Nama"].dropna().unique())
     )
@@ -335,18 +426,12 @@ elif st.session_state.page == "table":
     )
     filtered_df = filtered_df[mask_search]
 
-  st.info(
-      f"Menampilkan {len(filtered_df)} baris data | Database:"
-      f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
-  )
+  st.info(f"Menampilkan {len(filtered_df)} baris data | Sumber: {file_path}")
 
-  # Hilangkan kolom-kolom helper dan Kolom_20, Kolom_21 dari tabel tampilan
   columns_to_drop = [
       "Harga_Clean",
       "Kategori_Jenis",
       "SKPD_Nama",
-      "Kolom_20",
-      "Kolom_21",
   ]
   display_df = filtered_df.drop(
       columns=[c for c in columns_to_drop if c in filtered_df.columns],
@@ -376,8 +461,8 @@ elif st.session_state.page == "table":
         options=display_df.index,
         format_func=lambda x: (
             f"Baris {x+1}:"
-            f" {display_df.loc[x, 'Jenis / Nama Barang']} -"
-            f" {display_df.loc[x, 'Merk / Type']} ({display_df.loc[x, 'No. Polisi']})"
+            f" {display_df.loc[x, 'Jenis / Nama Barang'] if 'Jenis / Nama Barang' in display_df.columns else ''} -"
+            f" {display_df.loc[x, 'Merk / Type'] if 'Merk / Type' in display_df.columns else ''}"
         ),
     )
 
