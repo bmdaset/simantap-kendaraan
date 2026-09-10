@@ -240,7 +240,7 @@ elif st.session_state.page == "table":
   display_df = filtered_df.drop(
       columns=["Harga_Clean"], errors="ignore"
   ).reset_index(drop=True)
-  st.dataframe(display_df, use_container_width=True, height=400)
+  st.table(display_df)
 
   st.markdown("---")
   st.markdown("#### 🔍 Detail Data Satuan & Download")
