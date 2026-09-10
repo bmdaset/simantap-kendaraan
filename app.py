@@ -105,11 +105,12 @@ def load_data():
     else:
       df["Harga_Clean"] = 0
 
-    # Klasifikasi Kategori Kendaraan Presisi
+    # Klasifikasi Kategori Kendaraan Berdasarkan Database Excel secara Menyeluruh
     def deteksi_kategori(row):
-      text = str(row.get("Jenis / Nama Barang", "")).lower()
-      merk = str(row.get("Merk / Type", "")).lower()
-      combined = f"{text} {merk}"
+      # Menggabungkan seluruh teks dalam baris untuk mendeteksi kata kunci dari database
+      combined = " ".join(
+          [str(val) for val in row.values if pd.notna(val)]
+      ).lower()
 
       if any(k in combined for k in ["pick up", "pickup", "bak terbuka"]):
         return "Pick Up"
@@ -118,6 +119,7 @@ def load_data():
           for k in [
               "station wagon",
               "minibus",
+              "mini bus",
               "mobil",
               "jeep",
               "sedan",
@@ -148,6 +150,7 @@ def load_data():
               "beat",
               "vario",
               "mio",
+              "motor",
           ]
       ):
         return "Sepeda Motor"
@@ -250,48 +253,6 @@ if st.session_state.page == "menu":
       st.session_state.page = "table"
       st.rerun()
 
-  # Bagian Preview Rekapitulasi Rincian Berdasarkan Kolom 19 (Per Nama SKPD)
-  st.markdown("---")
-  st.markdown(
-      "#### 📊 Preview Jumlah Kendaraan per Nama SKPD (Berdasarkan Kolom 19)"
-  )
-  if not df.empty:
-    rekap_skpd = (
-        pd.pivot_table(
-            df,
-            index="SKPD_Nama",
-            columns="Kategori_Jenis",
-            values="No.",
-            aggfunc="count",
-            fill_value=0,
-        )
-        .reset_index()
-    )
-
-    for kat in ["Sepeda Motor", "Mobil", "Pick Up", "Lainnya"]:
-      if kat not in rekap_skpd.columns:
-        rekap_skpd[kat] = 0
-
-    cols_exist = ["Sepeda Motor", "Mobil", "Pick Up", "Lainnya"]
-    rekap_skpd["Jumlah Total"] = rekap_skpd[
-        [c for c in cols_exist if c in rekap_skpd.columns]
-    ].sum(axis=1)
-    rekap_skpd = rekap_skpd.sort_values(
-        by="Jumlah Total", ascending=False
-    ).reset_index(drop=True)
-
-    rekap_skpd = rekap_skpd.rename(
-        columns={
-            "SKPD_Nama": "Nama SKPD / Dinas",
-            "Sepeda Motor": "Jumlah Sepeda Motor",
-            "Mobil": "Jumlah Mobil",
-            "Pick Up": "Jumlah Pick Up",
-            "Lainnya": "Jumlah Lainnya",
-        }
-    )
-
-    st.dataframe(rekap_skpd, use_container_width=True, height=400)
-
 elif st.session_state.page == "table":
   col_back, col_ref, col_title = st.columns([1.5, 1.5, 5])
   with col_back:
@@ -312,6 +273,7 @@ elif st.session_state.page == "table":
     filtered_df = df[df["Kategori_Jenis"] == keyword]
 
   # Filter per Nama SKPD dari Kolom 19 di dalam halaman tabel
+  pilih_skpd = "Semua SKPD"
   if not filtered_df.empty:
     skpd_list = ["Semua SKPD"] + sorted(
         list(filtered_df["SKPD_Nama"].dropna().unique())
@@ -346,6 +308,20 @@ elif st.session_state.page == "table":
       columns=["Harga_Clean", "Kategori_Jenis"], errors="ignore"
   ).reset_index(drop=True)
   st.dataframe(display_df, use_container_width=True, height=400)
+
+  # --- PREVIEW RINGKASAN JUMLAH KATEGORI DI BAGIAN BAWAH ---
+  st.markdown("---")
+  st.markdown(
+      f"#### 📊 Ringkasan Jumlah Kategori Kendaraan ({pilih_skpd})"
+  )
+  if not filtered_df.empty:
+    summary_kat = (
+        filtered_df["Kategori_Jenis"].value_counts().reset_index()
+    )
+    summary_kat.columns = ["Kategori Kendaraan", "Jumlah Unit"]
+    st.dataframe(summary_kat, use_container_width=True)
+  else:
+    st.info("Tidak ada data untuk kategori ini.")
 
   st.markdown("---")
   st.markdown("#### 🔍 Detail Data Satuan & Download")
