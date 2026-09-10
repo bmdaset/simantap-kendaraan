@@ -10,7 +10,7 @@ import streamlit as st
 st.set_page_config(
     page_title="SIMANTAP - Kendaraan Dinas",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 st.markdown(
@@ -54,35 +54,23 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Sidebar untuk Upload File Excel & Clear Cache
-st.sidebar.title("📁 Pengaturan Database")
-uploaded_file = st.sidebar.file_uploader(
-    "Upload / Ganti File Excel KIB B:", type=["xlsx", "xls"]
-)
-
-if st.sidebar.button("🔄 Bersihkan Cache & Muat Ulang"):
-  st.cache_data.clear()
-  st.rerun()
-
 
 @st.cache_data
-def load_data_from_bytes(file_bytes, file_name_str):
+def load_data():
+  file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
+  if not os.path.exists(file_path):
+    all_excel = glob.glob(".xlsx") + glob.glob(".xls")
+    if all_excel:
+      file_path = all_excel[0]
+    else:
+      return pd.DataFrame(), None
+
   try:
-    source = BytesIO(file_bytes)
-    xl = pd.ExcelFile(source)
-    sheet_names = xl.sheet_names
-
-    target_sheet = sheet_names[0]
-    for s in sheet_names:
-      if "kendaraan" in s.lower() or "b" in s.lower():
-        target_sheet = s
-        break
-
-    # Baca file mentah untuk mencari baris header yang tepat
+    # 1. Baca file mentah untuk mendeteksi baris header secara otomatis
     df_raw = pd.read_excel(
-        BytesIO(file_bytes), sheet_name=target_sheet, header=None
+        file_path, sheet_name="KENDARAAN DINAS", header=None
     )
-    header_row_idx = 0
+    header_row_idx = 16  # Fallback default
     for idx, row in df_raw.iterrows():
       row_str = " ".join([str(v) for v in row.values if pd.notna(v)]).lower()
       if "no" in row_str and (
@@ -91,16 +79,16 @@ def load_data_from_bytes(file_bytes, file_name_str):
         header_row_idx = idx
         break
 
-    # Baca Excel dengan header tepat pada baris yang ditemukan
+    # 2. Baca file Excel dengan header yang tepat
     df = pd.read_excel(
-        BytesIO(file_bytes), sheet_name=target_sheet, header=header_row_idx
+        file_path, sheet_name="KENDARAAN DINAS", header=header_row_idx
     )
     df = df.dropna(how="all").reset_index(drop=True)
 
     # Bersihkan nama kolom dari spasi/karakter tersembunyi
     df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
 
-    # Petakan nama kolom agar sesuai standar KIB B secara fleksibel
+    # 3. Petakan nama kolom secara fleksibel agar sesuai standar KIB B
     rename_map = {}
     for col in df.columns:
       col_low = col.lower()
@@ -165,7 +153,7 @@ def load_data_from_bytes(file_bytes, file_name_str):
       df = df[df[first_col].apply(is_valid_row)].copy()
       df = df.reset_index(drop=True)
 
-    # Bersihkan format angka/tahun dari buntut desimal .000000
+    # 4. Bersihkan format angka/tahun/register dari buntut desimal .000000
     for col in df.columns:
       df[col] = (
           df[col]
@@ -186,7 +174,7 @@ def load_data_from_bytes(file_bytes, file_name_str):
     else:
       df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-    # Bersihkan kolom Harga untuk perhitungan
+    # Bersihkan kolom Harga untuk perhitungan nilai aset
     harga_col_name = "Harga (Rp)" if "Harga (Rp)" in df.columns else None
     if not harga_col_name:
       for c in df.columns:
@@ -205,11 +193,11 @@ def load_data_from_bytes(file_bytes, file_name_str):
     else:
       df["Harga_Clean"] = 0
 
-    # Deteksi Kategori Kendaraan otomatis
     def deteksi_kategori(row):
       combined = " ".join(
           [str(val) for val in row.values if pd.notna(val)]
       ).lower()
+
       if any(k in combined for k in ["pick up", "pickup", "bak terbuka"]):
         return "Pick Up"
       elif any(
@@ -255,28 +243,15 @@ def load_data_from_bytes(file_bytes, file_name_str):
       else:
         return "Lainnya"
 
-    df["Kategori_Jenis"] = (
-        df.apply(deteksi_kategori, axis=1) if not df.empty else []
-    )
+    df["Kategori_Jenis"] = df.apply(deteksi_kategori, axis=1)
 
-    return df, file_name_str
+    return df, file_path
   except Exception as e:
-    st.error(f"Terjadi kesalahan saat membaca file: {e}")
+    print("Error:", e)
     return pd.DataFrame(), None
 
 
-# Load data based on uploaded file or local file
-if uploaded_file is not None:
-  file_bytes = uploaded_file.getvalue()
-  df, file_path = load_data_from_bytes(file_bytes, uploaded_file.name)
-else:
-  all_excel = glob.glob(".xlsx") + glob.glob(".xls")
-  if all_excel:
-    with open(all_excel[0], "rb") as f:
-      file_bytes = f.read()
-    df, file_path = load_data_from_bytes(file_bytes, all_excel[0])
-  else:
-    df, file_path = pd.DataFrame(), None
+df, file_path = load_data()
 
 
 def format_rupiah(nilai):
@@ -312,13 +287,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if df.empty:
-  st.warning(
-      "📂 *Silakan upload file Excel kendaraan Anda* melalui panel di sidebar"
-      " sebelah kiri (atau pastikan file Excel sudah ada di repository"
-      " GitHub)."
-  )
-elif st.session_state.page == "menu":
+if st.session_state.page == "menu":
   st.markdown(
       "<h4 style='text-align:center; color:#34495e; margin-bottom:25px;'>Silakan"
       " Pilih Kategori Aset Kendaraan</h4>",
@@ -401,7 +370,7 @@ elif st.session_state.page == "table":
     filtered_df = df[df["Kategori_Jenis"] == keyword]
 
   pilih_skpd = "Semua SKPD"
-  if not filtered_df.empty and "SKPD_Nama" in filtered_df.columns:
+  if not filtered_df.empty:
     skpd_list = ["Semua SKPD"] + sorted(
         list(filtered_df["SKPD_Nama"].dropna().unique())
     )
@@ -426,18 +395,25 @@ elif st.session_state.page == "table":
     )
     filtered_df = filtered_df[mask_search]
 
-  st.info(f"Menampilkan {len(filtered_df)} baris data | Sumber: {file_path}")
+  st.info(
+      f"Menampilkan {len(filtered_df)} baris data | Database:"
+      f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
+  )
 
-  columns_to_drop = [
-      "Harga_Clean",
-      "Kategori_Jenis",
-      "SKPD_Nama",
-  ]
   display_df = filtered_df.drop(
-      columns=[c for c in columns_to_drop if c in filtered_df.columns],
+      columns=[
+          c
+          for c in [
+              "Harga_Clean",
+              "Kategori_Jenis",
+              "SKPD_Nama",
+              "Nama Pengguna",
+              "SKPD",
+          ]
+          if c in filtered_df.columns
+      ],
       errors="ignore",
   ).reset_index(drop=True)
-
   st.dataframe(display_df, use_container_width=True, height=400)
 
   st.markdown("---")
@@ -476,6 +452,7 @@ elif st.session_state.page == "table":
           "Keterangan / Isi Data": values_list,
       })
 
+      # --- PREVIEW BERGARIS PADA LAYAR ---
       styled_preview = (
           detail_df.style.set_table_styles([
               {
@@ -509,6 +486,7 @@ elif st.session_state.page == "table":
 
       col_e1, col_e2, col_e3 = st.columns(3)
 
+      # 1. Download Excel Styled Vertical Card
       with col_e1:
 
         def create_styled_vertical_excel(cols, vals):
@@ -577,6 +555,7 @@ elif st.session_state.page == "table":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
+      # 2. Download CSV Detail
       with col_e2:
         csv_data = detail_df.to_csv(index=False).encode("utf-8")
         st.download_button(
@@ -586,12 +565,14 @@ elif st.session_state.page == "table":
             mime="text/csv",
         )
 
+      # 3. Download & Preview PDF Detail
       with col_e3:
 
         def create_pdf_detail(cols, vals):
           pdf = FPDF(orientation="P", unit="mm", format="A4")
           pdf.add_page()
 
+          # Header Title
           pdf.set_font("Arial", "B", 14)
           pdf.set_text_color(30, 60, 114)
           pdf.cell(
@@ -637,3 +618,16 @@ elif st.session_state.page == "table":
             file_name=f"Detail_Kendaraan_{selected_row_idx+1}.pdf",
             mime="application/pdf",
         )
+
+      # Preview PDF menggunakan tag iframe agar langsung terlihat di layar
+      st.markdown("---")
+      st.markdown(
+          "<p style='font-weight:600; color:#1e3c72;'>Preview Dokumen"
+          " PDF:</p>",
+          unsafe_allow_html=True,
+      )
+      import base64
+
+      base64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+      pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="500px" type="application/pdf"></iframe>'
+      st.markdown(pdf_display, unsafe_allow_html=True)
