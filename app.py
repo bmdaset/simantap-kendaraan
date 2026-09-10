@@ -10,7 +10,7 @@ import streamlit as st
 st.set_page_config(
     page_title="SIMANTAP - Kendaraan Dinas",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 st.markdown(
@@ -74,28 +74,39 @@ kolom_kib_b = [
     "Keterangan",
 ]
 
+# Sidebar untuk Upload File Excel Cadangan
+st.sidebar.title("📁 Pengaturan Database")
+uploaded_file = st.sidebar.file_uploader(
+    "Upload / Ganti File Excel KIB B:", type=["xlsx", "xls"]
+)
+
 
 @st.cache_data
-def load_data():
-  all_excel = glob.glob(".xlsx") + glob.glob(".xls")
-  if not all_excel:
-    return pd.DataFrame(), None
+def load_data(uploaded_file_obj):
+  file_source = None
+  file_path_str = "File Uploaded"
 
-  file_path = all_excel[0]
+  if uploaded_file_obj is not None:
+    file_source = uploaded_file_obj
+  else:
+    all_excel = glob.glob(".xlsx") + glob.glob(".xls")
+    if not all_excel:
+      return pd.DataFrame(), None
+    file_source = all_excel[0]
+    file_path_str = all_excel[0]
+
   try:
-    xl = pd.ExcelFile(file_path)
+    xl = pd.ExcelFile(file_source)
     sheet_names = xl.sheet_names
 
-    # Pilih sheet yang sesuai (utamakan 'KENDARAAN DINAS' atau sheet pertama)
     target_sheet = sheet_names[0]
     for s in sheet_names:
       if "kendaraan" in s.lower() or "b" in s.lower():
         target_sheet = s
         break
 
-    df = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
+    df = pd.read_excel(file_source, sheet_name=target_sheet, header=None)
 
-    # Cari baris header otomatis jika ada kata 'No.' atau 'Jenis'
     header_row_idx = 0
     for idx, row in df.iterrows():
       row_str = " ".join(row.astype(str).values).lower()
@@ -105,9 +116,11 @@ def load_data():
         header_row_idx = idx
         break
 
-    # Muat ulang dengan skiprows yang tepat
     df = pd.read_excel(
-        file_path, sheet_name=target_sheet, skiprows=header_row_idx, header=None
+        file_source,
+        sheet_name=target_sheet,
+        skiprows=header_row_idx,
+        header=None,
     )
     df = df.dropna(how="all").reset_index(drop=True)
 
@@ -117,7 +130,6 @@ def load_data():
       col_names.append(f"Kolom_{i+1}")
     df.columns = col_names[:num_cols]
 
-    # Ubah nama Kolom 18 dan Kolom 19 jika ada
     if num_cols >= 18:
       df = df.rename(columns={df.columns[17]: "Nama Pengguna"})
     if num_cols >= 19:
@@ -208,13 +220,13 @@ def load_data():
         df.apply(deteksi_kategori, axis=1) if not df.empty else []
     )
 
-    return df, file_path
+    return df, file_path_str
   except Exception as e:
     print("Error:", e)
     return pd.DataFrame(), None
 
 
-df, file_path = load_data()
+df, file_path = load_data(uploaded_file)
 
 
 def format_rupiah(nilai):
@@ -251,9 +263,10 @@ st.markdown(
 )
 
 if df.empty:
-  st.error(
-      "⚠️ File Excel tidak ditemukan atau format data tidak dapat dibaca."
-      " Pastikan file Excel sudah di-upload ke repository GitHub Anda."
+  st.warning(
+      "📂 *Silakan upload file Excel kendaraan Anda* melalui panel di sidebar"
+      " sebelah kiri (atau pastikan file Excel sudah ada di repository"
+      " GitHub)."
   )
 elif st.session_state.page == "menu":
   st.markdown(
@@ -363,12 +376,8 @@ elif st.session_state.page == "table":
     )
     filtered_df = filtered_df[mask_search]
 
-  st.info(
-      f"Menampilkan {len(filtered_df)} baris data | Database:"
-      f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
-  )
+  st.info(f"Menampilkan {len(filtered_df)} baris data | Sumber: {file_path}")
 
-  # Hilangkan kolom-kolom helper dan Kolom_20, Kolom_21 dari tabel tampilan
   columns_to_drop = [
       "Harga_Clean",
       "Kategori_Jenis",
