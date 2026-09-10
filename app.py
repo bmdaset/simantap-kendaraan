@@ -54,6 +54,27 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Urutan kolom KIB B standar pemerintahan yang disesuaikan agar tidak tertukar
+kolom_kib_b = [
+    "No.",
+    "Kode Lokasi",
+    "No. Urut",
+    "Jenis / Nama Barang",
+    "Kode Barang",
+    "No. Register",
+    "Merk / Type",
+    "Ukuran / CC",
+    "Bahan",
+    "Tahun Pembuatan",
+    "No. Pabrik",
+    "No. Rangka",
+    "No. Mesin",
+    "No. Polisi",
+    "Asal Usul",
+    "Harga (Rp)",
+    "Keterangan",
+]
+
 
 @st.cache_data
 def load_data():
@@ -66,105 +87,52 @@ def load_data():
       return pd.DataFrame(), None
 
   try:
-    # 1. Baca file mentah untuk mendeteksi baris header secara otomatis
-    df_raw = pd.read_excel(
-        file_path, sheet_name="KENDARAAN DINAS", header=None
-    )
-    header_row_idx = 16  # Fallback default
-    for idx, row in df_raw.iterrows():
-      row_str = " ".join([str(v) for v in row.values if pd.notna(v)]).lower()
-      if "no" in row_str and (
-          "barang" in row_str or "jenis" in row_str or "register" in row_str
-      ):
-        header_row_idx = idx
-        break
-
-    # 2. Baca file Excel dengan header yang tepat
+    # Membaca data dengan skiprows=16 untuk mempertahankan jumlah tepat 1603 baris
     df = pd.read_excel(
-        file_path, sheet_name="KENDARAAN DINAS", header=header_row_idx
+        file_path, sheet_name="KENDARAAN DINAS", skiprows=16, header=None
     )
     df = df.dropna(how="all").reset_index(drop=True)
 
-    # Bersihkan nama kolom dari spasi/karakter tersembunyi
-    df.columns = [str(c).strip().replace("\n", " ") for c in df.columns]
-
-    # 3. Petakan nama kolom secara fleksibel agar sesuai standar KIB B
-    rename_map = {}
-    for col in df.columns:
-      col_low = col.lower()
-      if "no." in col_low and "urut" in col_low:
-        rename_map[col] = "No. Urut"
-      elif "kode" in col_low and "lokasi" in col_low:
-        rename_map[col] = "Kode Lokasi"
-      elif "kode" in col_low and "barang" in col_low:
-        rename_map[col] = "Kode Barang"
-      elif (
-          "jenis" in col_low
-          or "nama barang" in col_low
-          or "barang" in col_low
-      ):
-        if "kode" not in col_low:
-          rename_map[col] = "Jenis / Nama Barang"
-      elif "register" in col_low:
-        rename_map[col] = "No. Register"
-      elif "merk" in col_low or "type" in col_low:
-        rename_map[col] = "Merk / Type"
-      elif "ukuran" in col_low or "cc" in col_low:
-        rename_map[col] = "Ukuran / CC"
-      elif "bahan" in col_low:
-        rename_map[col] = "Bahan"
-      elif "tahun" in col_low and "buat" in col_low:
-        rename_map[col] = "Tahun Pembuatan"
-      elif "pabrik" in col_low:
-        rename_map[col] = "No. Pabrik"
-      elif "rangka" in col_low:
-        rename_map[col] = "No. Rangka"
-      elif "mesin" in col_low:
-        rename_map[col] = "No. Mesin"
-      elif "polisi" in col_low:
-        rename_map[col] = "No. Polisi"
-      elif "asal" in col_low:
-        rename_map[col] = "Asal Usul"
-      elif "harga" in col_low or "rp" in col_low:
-        rename_map[col] = "Harga (Rp)"
-      elif "keterangan" in col_low:
-        rename_map[col] = "Keterangan"
-
-    df = df.rename(columns=rename_map)
-
-    # Deteksi kolom SKPD / Nama Pengguna di kolom terakhir jika ada
     num_cols = len(df.columns)
-    if num_cols >= 18:
-      df = df.rename(columns={df.columns[17]: "Nama Pengguna"})
-    if num_cols >= 19:
-      df = df.rename(columns={df.columns[18]: "SKPD"})
+    col_names = kolom_kib_b.copy()
+    for i in range(len(col_names), num_cols):
+      col_names.append(f"Kolom_{i+1}")
+    df.columns = col_names[:num_cols]
 
-    # Filter baris berdasarkan nomor urut valid di kolom pertama
     def is_valid_row(val):
       try:
-        val_str = str(val).strip()
-        val_int = int(float(val_str))
+        val_int = int(float(val))
         return val_int > 0
       except:
         return False
 
-    first_col = df.columns[0]
-    if not df.empty:
-      df = df[df[first_col].apply(is_valid_row)].copy()
-      df = df.reset_index(drop=True)
+    df = df[df[df.columns[0]].apply(is_valid_row)].copy()
+    df = df.reset_index(drop=True)
 
-    # 4. Bersihkan format angka/tahun/register dari buntut desimal .000000
+    # Pembersihan format desimal .000000 pada seluruh sel
     for col in df.columns:
       df[col] = (
           df[col]
           .astype(str)
           .str.replace(r"\.0+$", "", regex=True)
           .replace("nan", "")
+          .replace("None", "")
       )
 
-    if "SKPD" in df.columns:
+    if num_cols >= 19:
+      skpd_col_name = df.columns[18]
       df["SKPD_Nama"] = (
-          df["SKPD"]
+          df[skpd_col_name]
+          .ffill()
+          .fillna("DINAS / INSTANSI LAINNYA")
+          .astype(str)
+          .str.upper()
+          .str.strip()
+      )
+    elif num_cols >= 18:
+      skpd_col_name = df.columns[17]
+      df["SKPD_Nama"] = (
+          df[skpd_col_name]
           .ffill()
           .fillna("DINAS / INSTANSI LAINNYA")
           .astype(str)
@@ -174,18 +142,12 @@ def load_data():
     else:
       df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-    # Bersihkan kolom Harga untuk perhitungan nilai aset
-    harga_col_name = "Harga (Rp)" if "Harga (Rp)" in df.columns else None
-    if not harga_col_name:
-      for c in df.columns:
-        if "harga" in c.lower() or "rp" in c.lower():
-          harga_col_name = c
-          break
-
-    if harga_col_name:
+    target_harga_idx = 15
+    if num_cols > target_harga_idx:
+      harga_col_actual = df.columns[target_harga_idx]
       df["Harga_Clean"] = (
           pd.to_numeric(
-              df[harga_col_name].str.replace(r"[^\d.]", "", regex=True),
+              df[harga_col_actual].str.replace(r"[^\d.]", "", regex=True),
               errors="coerce",
           )
           .fillna(0)
@@ -401,18 +363,7 @@ elif st.session_state.page == "table":
   )
 
   display_df = filtered_df.drop(
-      columns=[
-          c
-          for c in [
-              "Harga_Clean",
-              "Kategori_Jenis",
-              "SKPD_Nama",
-              "Nama Pengguna",
-              "SKPD",
-          ]
-          if c in filtered_df.columns
-      ],
-      errors="ignore",
+      columns=["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"], errors="ignore"
   ).reset_index(drop=True)
   st.dataframe(display_df, use_container_width=True, height=400)
 
@@ -437,8 +388,8 @@ elif st.session_state.page == "table":
         options=display_df.index,
         format_func=lambda x: (
             f"Baris {x+1}:"
-            f" {display_df.loc[x, 'Jenis / Nama Barang'] if 'Jenis / Nama Barang' in display_df.columns else ''} -"
-            f" {display_df.loc[x, 'Merk / Type'] if 'Merk / Type' in display_df.columns else ''}"
+            f" {display_df.loc[x, 'Jenis / Nama Barang']} -"
+            f" {display_df.loc[x, 'Merk / Type']} ({display_df.loc[x, 'No. Polisi']})"
         ),
     )
 
