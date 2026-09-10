@@ -82,21 +82,10 @@ uploaded_file = st.sidebar.file_uploader(
 
 
 @st.cache_data
-def load_data(uploaded_file_obj):
-  file_source = None
-  file_path_str = "File Uploaded"
-
-  if uploaded_file_obj is not None:
-    file_source = uploaded_file_obj
-  else:
-    all_excel = glob.glob(".xlsx") + glob.glob(".xls")
-    if not all_excel:
-      return pd.DataFrame(), None
-    file_source = all_excel[0]
-    file_path_str = all_excel[0]
-
+def load_data_from_bytes(file_bytes, file_name_str):
   try:
-    xl = pd.ExcelFile(file_source)
+    source = BytesIO(file_bytes)
+    xl = pd.ExcelFile(source)
     sheet_names = xl.sheet_names
 
     target_sheet = sheet_names[0]
@@ -105,7 +94,9 @@ def load_data(uploaded_file_obj):
         target_sheet = s
         break
 
-    df = pd.read_excel(file_source, sheet_name=target_sheet, header=None)
+    df = pd.read_excel(
+        BytesIO(file_bytes), sheet_name=target_sheet, header=None
+    )
 
     header_row_idx = 0
     for idx, row in df.iterrows():
@@ -117,7 +108,7 @@ def load_data(uploaded_file_obj):
         break
 
     df = pd.read_excel(
-        file_source,
+        BytesIO(file_bytes),
         sheet_name=target_sheet,
         skiprows=header_row_idx,
         header=None,
@@ -220,13 +211,24 @@ def load_data(uploaded_file_obj):
         df.apply(deteksi_kategori, axis=1) if not df.empty else []
     )
 
-    return df, file_path_str
+    return df, file_name_str
   except Exception as e:
-    print("Error:", e)
+    st.error(f"Terjadi kesalahan saat membaca file: {e}")
     return pd.DataFrame(), None
 
 
-df, file_path = load_data(uploaded_file)
+# Load data based on uploaded file or local file
+if uploaded_file is not None:
+  file_bytes = uploaded_file.getvalue()
+  df, file_path = load_data_from_bytes(file_bytes, uploaded_file.name)
+else:
+  all_excel = glob.glob(".xlsx") + glob.glob(".xls")
+  if all_excel:
+    with open(all_excel[0], "rb") as f:
+      file_bytes = f.read()
+    df, file_path = load_data_from_bytes(file_bytes, all_excel[0])
+  else:
+    df, file_path = pd.DataFrame(), None
 
 
 def format_rupiah(nilai):
