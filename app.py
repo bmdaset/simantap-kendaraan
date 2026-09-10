@@ -97,6 +97,12 @@ def load_data():
       col_names.append(f"Kolom_{i+1}")
     df.columns = col_names[:num_cols]
 
+    # Ubah nama Kolom 18 dan Kolom 19
+    if num_cols >= 18:
+      df = df.rename(columns={df.columns[17]: "Nama Pengguna"})
+    if num_cols >= 19:
+      df = df.rename(columns={df.columns[18]: "SKPD"})
+
     def is_valid_row(val):
       try:
         val_int = int(float(val))
@@ -107,10 +113,9 @@ def load_data():
     df = df[df[df.columns[0]].apply(is_valid_row)].copy()
     df = df.reset_index(drop=True)
 
-    if num_cols >= 19:
-      skpd_col_name = df.columns[18]
+    if "SKPD" in df.columns:
       df["SKPD_Nama"] = (
-          df[skpd_col_name]
+          df["SKPD"]
           .ffill()
           .fillna("DINAS / INSTANSI LAINNYA")
           .astype(str)
@@ -133,7 +138,6 @@ def load_data():
       combined = " ".join(
           [str(val) for val in row.values if pd.notna(val)]
       ).lower()
-
       if any(k in combined for k in ["pick up", "pickup", "bak terbuka"]):
         return "Pick Up"
       elif any(
@@ -336,9 +340,19 @@ elif st.session_state.page == "table":
       f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
   )
 
+  # Hilangkan kolom-kolom helper dan Kolom_20, Kolom_21 dari tabel tampilan
+  columns_to_drop = [
+      "Harga_Clean",
+      "Kategori_Jenis",
+      "SKPD_Nama",
+      "Kolom_20",
+      "Kolom_21",
+  ]
   display_df = filtered_df.drop(
-      columns=["Harga_Clean", "Kategori_Jenis"], errors="ignore"
+      columns=[c for c in columns_to_drop if c in filtered_df.columns],
+      errors="ignore",
   ).reset_index(drop=True)
+
   st.dataframe(display_df, use_container_width=True, height=400)
 
   st.markdown("---")
@@ -377,7 +391,6 @@ elif st.session_state.page == "table":
           "Keterangan / Isi Data": values_list,
       })
 
-      # --- PREVIEW BERGARIS PADA LAYAR ---
       styled_preview = (
           detail_df.style.set_table_styles([
               {
@@ -411,7 +424,6 @@ elif st.session_state.page == "table":
 
       col_e1, col_e2, col_e3 = st.columns(3)
 
-      # 1. Download Excel Styled Vertical Card
       with col_e1:
 
         def create_styled_vertical_excel(cols, vals):
@@ -480,7 +492,6 @@ elif st.session_state.page == "table":
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-      # 2. Download CSV Detail
       with col_e2:
         csv_data = detail_df.to_csv(index=False).encode("utf-8")
         st.download_button(
@@ -490,14 +501,12 @@ elif st.session_state.page == "table":
             mime="text/csv",
         )
 
-      # 3. Download & Preview PDF Detail
       with col_e3:
 
         def create_pdf_detail(cols, vals):
           pdf = FPDF(orientation="P", unit="mm", format="A4")
           pdf.add_page()
 
-          # Header Title
           pdf.set_font("Arial", "B", 14)
           pdf.set_text_color(30, 60, 114)
           pdf.cell(
@@ -543,16 +552,3 @@ elif st.session_state.page == "table":
             file_name=f"Detail_Kendaraan_{selected_row_idx+1}.pdf",
             mime="application/pdf",
         )
-
-      # Preview PDF menggunakan tag iframe agar langsung terlihat di layar
-      st.markdown("---")
-      st.markdown(
-          "<p style='font-weight:600; color:#1e3c72;'>Preview Dokumen"
-          " PDF:</p>",
-          unsafe_allow_html=True,
-      )
-      import base64
-
-      base64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
-      pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="500px" type="application/pdf"></iframe>'
-      st.markdown(pdf_display, unsafe_allow_html=True)
