@@ -17,12 +17,9 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Background Utama Aplikasi - Gradasi Berwarna Elegan */
     .stApp {
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     }
-
-    /* Header Utama */
     .main-header {
         background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
         padding: 32px;
@@ -46,8 +43,6 @@ st.markdown(
         opacity: 0.95;
         font-weight: 300;
     }
-
-    /* Kartu Menu KIB Utama & Kategori (Berwarna & Elegan) */
     .kib-card-kib-b {
         background: linear-gradient(135deg, #2b5876 0%, #4e4376 100%);
         padding: 26px;
@@ -100,8 +95,6 @@ st.markdown(
         box-shadow: 0 6px 18px rgba(247, 183, 51, 0.35);
         margin-bottom: 20px;
     }
-
-    /* Styling Tombol Umum */
     .stButton>button {
         width: 100%;
         border-radius: 10px;
@@ -117,7 +110,7 @@ st.markdown(
         box-shadow: 0 8px 20px rgba(0,0,0,0.25);
     }
     </style>
-""",
+    """,
     unsafe_allow_html=True,
 )
 
@@ -132,7 +125,7 @@ def load_all_data():
     else:
       return pd.DataFrame(), pd.DataFrame(), None
 
-  # 1. Load KIB B (KENDARAAN DINAS) Sesuai Format Asli Excel & Permendagri (TIDAK DIUBAH)
+  # 1. Load KIB B (KENDARAAN DINAS) Sesuai Format Asli Excel & Permendagri (Multi-row Header)
   df_kendaraan = pd.DataFrame()
   try:
     df_raw_k = pd.read_excel(
@@ -141,26 +134,52 @@ def load_all_data():
     h_idx_k = 15
     for idx, row in df_raw_k.head(25).iterrows():
       txt = " ".join(str(v) for v in row.values).lower()
-      if "kode barang" in txt or "jenis" in txt or "merk" in txt:
+      if (
+          "kode barang" in txt
+          or "jenis" in txt
+          or "merk" in txt
+          or "nomor" in txt
+      ):
         h_idx_k = idx
         break
 
     df_k = pd.read_excel(
-        file_path, sheet_name="KENDARAAN DINAS", header=h_idx_k
+        file_path, sheet_name="KENDARAAN DINAS", header=[h_idx_k, h_idx_k + 1]
     )
+    df_k.columns = [
+        " ".join([str(c) for c in col if "unnamed" not in str(c).lower()]).strip()
+        for col in df_k.columns
+    ]
+    if len(df_k.columns) == 0 or all(c == "" for c in df_k.columns):
+      df_k = pd.read_excel(
+          file_path, sheet_name="KENDARAAN DINAS", header=h_idx_k + 1
+      )
+
     df_k = df_k.loc[:, ~df_k.columns.astype(str).str.contains("^Unnamed")]
-    df_k.columns = [str(c).strip() for c in df_k.columns]
     df_k = df_k.dropna(how="all").reset_index(drop=True)
 
     first_col = df_k.columns[0]
+    df_k = df_k[
+        df_k[first_col].apply(
+            lambda x: str(x).strip().replace(".0", "").isdigit()
+            if pd.notna(x)
+            else False
+        )
+    ].reset_index(drop=True)
 
-    def is_valid_row(val):
-      try:
-        return int(float(val)) > 0
-      except:
-        return False
+    rename_k = {}
+    for col in df_k.columns:
+      cl = col.lower()
+      if cl in ["no", "no.", "nomor urut"]:
+        rename_k[col] = "No. Urut"
+      elif "kode" in cl:
+        rename_k[col] = "Kode Barang"
+      elif cl in ["nomor register", "register"]:
+        rename_k[col] = "Nomor Register"
+    df_k = df_k.rename(columns=rename_k)
 
-    df_k = df_k[df_k[first_col].apply(is_valid_row)].reset_index(drop=True)
+    if "No. Urut" in df_k.columns:
+      df_k["No. Urut"] = range(1, len(df_k) + 1)
 
     for col in df_k.columns:
       df_k[col] = (
@@ -274,21 +293,42 @@ def load_all_data():
         break
 
     df_t = pd.read_excel(
-        file_path, sheet_name="KIB A TANAH", header=h_idx_t
+        file_path, sheet_name="KIB A TANAH", header=[h_idx_t, h_idx_t + 1]
     )
+    df_t.columns = [
+        " ".join([str(c) for c in col if "unnamed" not in str(c).lower()]).strip()
+        for col in df_t.columns
+    ]
+    if len(df_t.columns) == 0 or all(c == "" for c in df_t.columns):
+      df_t = pd.read_excel(
+          file_path, sheet_name="KIB A TANAH", header=h_idx_t + 1
+      )
+
     df_t = df_t.loc[:, ~df_t.columns.astype(str).str.contains("^Unnamed")]
-    df_t.columns = [str(c).strip() for c in df_t.columns]
     df_t = df_t.dropna(how="all").reset_index(drop=True)
 
     first_col_t = df_t.columns[0]
+    df_t = df_t[
+        df_t[first_col_t].apply(
+            lambda x: str(x).strip().replace(".0", "").isdigit()
+            if pd.notna(x)
+            else False
+        )
+    ].reset_index(drop=True)
 
-    def is_valid_row_t(val):
-      try:
-        return int(float(val)) > 0
-      except:
-        return False
+    rename_t = {}
+    for col in df_t.columns:
+      cl = col.lower()
+      if cl in ["no", "no.", "nomor urut"]:
+        rename_t[col] = "No. Urut"
+      elif "kode" in cl:
+        rename_t[col] = "Kode Barang"
+      elif cl in ["nomor", "no. register", "register"]:
+        rename_t[col] = "Nomor Register"
+    df_t = df_t.rename(columns=rename_t)
 
-    df_t = df_t[df_t[first_col_t].apply(is_valid_row_t)].reset_index(drop=True)
+    if "No. Urut" in df_t.columns:
+      df_t["No. Urut"] = range(1, len(df_t) + 1)
 
     for col in df_t.columns:
       df_t[col] = (
