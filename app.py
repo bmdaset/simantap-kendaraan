@@ -66,7 +66,6 @@ def load_data():
       return pd.DataFrame(), None
 
   try:
-    # Membaca baris header secara fleksibel sesuai format KIB B di Excel
     df_raw = pd.read_excel(
         file_path, sheet_name="KENDARAAN DINAS", header=None
     )
@@ -81,7 +80,6 @@ def load_data():
         file_path, sheet_name="KENDARAAN DINAS", header=header_idx
     )
 
-    # Membersihkan nama kolom dari unnamed/kosong
     df = df.loc[:, ~df.columns.astype(str).str.contains("^Unnamed")]
     df.columns = [str(c).strip() for c in df.columns]
 
@@ -101,7 +99,23 @@ def load_data():
 
     df = df[df[first_col].apply(is_valid_row)].reset_index(drop=True)
 
-    # Pembersihan format desimal .0 pada sel data string
+    # Penyesuaian / Rename Nama Kolom secara spesifik sesuai KIB B
+    rename_mapping = {}
+    for col in df.columns:
+      col_lower = col.lower()
+      if col_lower in ["no", "no.", "nomor urut"]:
+        rename_mapping[col] = "No. Urut"
+      elif "kode" in col_lower:
+        rename_mapping[col] = "Kode Barang"
+      elif col_lower in ["nomor", "no. register", "register"]:
+        rename_mapping[col] = "Nomor Register"
+
+    df = df.rename(columns=rename_mapping)
+
+    # Pastikan Kolom No. Urut berisi nomor urut rapi dari 1 sampai 1603
+    if "No. Urut" in df.columns:
+      df["No. Urut"] = range(1, len(df) + 1)
+
     for col in df.columns:
       df[col] = (
           df[col]
@@ -234,7 +248,7 @@ st.markdown(
 if st.session_state.page == "menu":
   st.markdown(
       "<h4 style='text-align:center; color:#34495e; margin-bottom:25px;'>Silakan"
-      f" Pilih Kategori Aset Kendaraan (Total Database: {len(df):,} Unit</h4>",
+      f" Pilih Kategori Aset Kendaraan (Total Database: {len(df):,} Unit)</h4>",
       unsafe_allow_html=True,
   )
 
