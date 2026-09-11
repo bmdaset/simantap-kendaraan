@@ -69,58 +69,55 @@ def load_data():
     df_raw = pd.read_excel(
         file_path, sheet_name="KENDARAAN DINAS", header=None
     )
-    header_idx = 15
-    for idx, row in df_raw.head(25).iterrows():
-      txt = " ".join(str(v) for v in row.values).lower()
-      if "kode barang" in txt or "jenis" in txt or "merk" in txt:
-        header_idx = idx
-        break
 
-    df = pd.read_excel(
-        file_path, sheet_name="KENDARAAN DINAS", header=header_idx
-    )
+    # Definisi kolom KIB B secara akurat dan lengkap
+    columns_kib_b = [
+        "No. Urut",
+        "Kode Barang",
+        "Jenis Barang",
+        "Nomor Register",
+        "Merk / Type",
+        "Ukuran / CC",
+        "Bahan",
+        "Tahun Pembelian",
+        "Nomor Pabrik",
+        "Nomor Rangka",
+        "Nomor Mesin",
+        "Nomor Polisi",
+        "Nomor BPKB",
+        "Asal Usul",
+        "Jumlah / Satuan",
+        "Harga",
+        "Keterangan",
+        "Pengguna / Pemakai",
+        "SKPD",
+    ]
 
-    df = df.loc[:, ~df.columns.astype(str).str.contains("^Unnamed")]
-    df.columns = [str(c).strip() for c in df.columns]
+    # Data aktual dimulai dari baris ke-16 (index 15)
+    df = df_raw.iloc[15:].copy()
 
-    # CATATAN: Batas kolom iloc dihapus agar seluruh kolom kanan (No. Polisi, No. Rangka, No. Mesin, No. BPKB) terbaca penuh.
+    if df.shape[1] <= len(columns_kib_b):
+      df.columns = columns_kib_b[: df.shape[1]]
+    else:
+      extra_cols = [
+          f"Kolom_{i}" for i in range(len(columns_kib_b), df.shape[1])
+      ]
+      df.columns = columns_kib_b + extra_cols
 
-    df = df.dropna(how="all").reset_index(drop=True)
+    df = df.reset_index(drop=True)
 
-    first_col = df.columns[0]
-
+    # Validasi baris berdasarkan No. Urut angka valid > 0
     def is_valid_row(val):
       try:
         return int(float(val)) > 0
       except:
         return False
 
-    df = df[df[first_col].apply(is_valid_row)].reset_index(drop=True)
-
-    # Penyesuaian nama kolom spesifik jika diperlukan
-    rename_mapping = {}
-    for col in df.columns:
-      col_lower = col.lower()
-      if col_lower in ["no", "no.", "nomor urut"]:
-        rename_mapping[col] = "No. Urut"
-      elif "kode" in col_lower:
-        rename_mapping[col] = "Kode Barang"
-      elif col_lower in ["nomor", "no. register", "register"]:
-        rename_mapping[col] = "Nomor Register"
-      elif "polisi" in col_lower:
-        rename_mapping[col] = "Nomor Polisi"
-      elif "rangka" in col_lower or "pabrik" in col_lower:
-        rename_mapping[col] = "Nomor Rangka"
-      elif "mesin" in col_lower:
-        rename_mapping[col] = "Nomor Mesin"
-      elif "bpkb" in col_lower:
-        rename_mapping[col] = "Nomor BPKB"
-
-    df = df.rename(columns=rename_mapping)
-
     if "No. Urut" in df.columns:
+      df = df[df["No. Urut"].apply(is_valid_row)].reset_index(drop=True)
       df["No. Urut"] = range(1, len(df) + 1)
 
+    # Pembersihan string & spasi ekstra di seluruh dataframe
     for col in df.columns:
       df[col] = (
           df[col]
@@ -128,8 +125,10 @@ def load_data():
           .str.replace(r"\.0+$", "", regex=True)
           .replace("nan", "")
           .replace("None", "")
+          .str.strip()
       )
 
+    # Penanganan SKPD
     skpd_col = next(
         (c for c in df.columns if "skpd" in c.lower() or "dinas" in c.lower()),
         None,
@@ -146,6 +145,7 @@ def load_data():
     else:
       df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
+    # Pembersihan nilai Harga
     harga_col = next(
         (c for c in df.columns if "harga" in c.lower() or "rupiah" in c.lower()),
         None,
@@ -157,6 +157,7 @@ def load_data():
     else:
       df["Harga_Clean"] = 0
 
+    # Deteksi Kategori Kendaraan
     def deteksi_kategori(row):
       combined = " ".join(
           [str(val) for val in row.values if pd.notna(val)]
@@ -347,7 +348,7 @@ elif st.session_state.page == "table":
       filtered_df = filtered_df[filtered_df["SKPD_Nama"] == pilih_skpd]
 
   search_query = st.text_input(
-      "🔍 Cari data (Merk, No. Polisi, No. Rangka, No. Mesin, No. BPKB,"
+      "🔍 Cari data (No. Polisi, No. Rangka, No. Mesin, No. BPKB, Merk,"
       " dll)..."
   )
   if search_query:
@@ -399,7 +400,7 @@ elif st.session_state.page == "table":
     selected_row_idx = st.selectbox(
         "Pilih Kendaraan untuk Lihat Detail Lengkap:",
         options=display_df.index,
-        format_func=lambda x: f"Baris {x+1}: {display_df.iloc[x].values[0]}",
+        format_func=lambda x: f"Baris {x+1}: No. Polisi: {display_df.loc[x, 'Nomor Polisi'] if 'Nomor Polisi' in display_df.columns else display_df.iloc[x].values[0]} | Merk: {display_df.loc[x, 'Merk / Type'] if 'Merk / Type' in display_df.columns else ''}",
     )
 
     if selected_row_idx is not None:
