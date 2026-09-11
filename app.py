@@ -83,9 +83,7 @@ def load_data():
     df = df.loc[:, ~df.columns.astype(str).str.contains("^Unnamed")]
     df.columns = [str(c).strip() for c in df.columns]
 
-    # Mengabaikan kolom ke-19 hingga ke-21 jika ada
-    if df.shape[1] > 18:
-      df = df.iloc[:, :18]
+    # CATATAN: Batas kolom iloc dihapus agar seluruh kolom kanan (No. Polisi, No. Rangka, No. Mesin, No. BPKB) terbaca penuh.
 
     df = df.dropna(how="all").reset_index(drop=True)
 
@@ -99,7 +97,7 @@ def load_data():
 
     df = df[df[first_col].apply(is_valid_row)].reset_index(drop=True)
 
-    # Penyesuaian / Rename Nama Kolom secara spesifik sesuai KIB B
+    # Penyesuaian nama kolom spesifik jika diperlukan
     rename_mapping = {}
     for col in df.columns:
       col_lower = col.lower()
@@ -109,10 +107,17 @@ def load_data():
         rename_mapping[col] = "Kode Barang"
       elif col_lower in ["nomor", "no. register", "register"]:
         rename_mapping[col] = "Nomor Register"
+      elif "polisi" in col_lower:
+        rename_mapping[col] = "Nomor Polisi"
+      elif "rangka" in col_lower or "pabrik" in col_lower:
+        rename_mapping[col] = "Nomor Rangka"
+      elif "mesin" in col_lower:
+        rename_mapping[col] = "Nomor Mesin"
+      elif "bpkb" in col_lower:
+        rename_mapping[col] = "Nomor BPKB"
 
     df = df.rename(columns=rename_mapping)
 
-    # Pastikan Kolom No. Urut berisi nomor urut rapi dari 1 sampai 1603
     if "No. Urut" in df.columns:
       df["No. Urut"] = range(1, len(df) + 1)
 
@@ -261,10 +266,10 @@ if st.session_state.page == "menu":
 
   with col1:
     with st.container(border=True):
-      st.markdown("### 📦 *Semua Kendaraan*")
+      st.markdown("### 📦 Semua Kendaraan")
       st.write(
-          f"Total Unit: *{t_semua:,} Data*\n\nTotal Nilai Aset:"
-          f" *{p_semua}*"
+          f"Total Unit: {t_semua:,} Data\n\nTotal Nilai Aset:"
+          f" {p_semua}"
       )
       if st.button("Kelola Semua Kendaraan", key="btn_semua"):
         st.session_state.keyword = ""
@@ -274,10 +279,10 @@ if st.session_state.page == "menu":
 
     st.write("")
     with st.container(border=True):
-      st.markdown("### 🚗 *Mobil*")
+      st.markdown("### 🚗 Mobil")
       st.write(
-          f"Total Unit: *{t_mobil:,} Data*\n\nTotal Nilai Aset:"
-          f" *{p_mobil}*"
+          f"Total Unit: {t_mobil:,} Data\n\nTotal Nilai Aset:"
+          f" {p_mobil}"
       )
       if st.button("Kelola Data Mobil", key="btn_mobil"):
         st.session_state.keyword = "Mobil"
@@ -287,10 +292,10 @@ if st.session_state.page == "menu":
 
   with col2:
     with st.container(border=True):
-      st.markdown("### 🏍️ *Sepeda Motor*")
+      st.markdown("### 🏍️ Sepeda Motor")
       st.write(
-          f"Total Unit: *{t_motor:,} Data*\n\nTotal Nilai Aset:"
-          f" *{p_motor}*"
+          f"Total Unit: {t_motor:,} Data\n\nTotal Nilai Aset:"
+          f" {p_motor}"
       )
       if st.button("Kelola Sepeda Motor", key="btn_motor"):
         st.session_state.keyword = "Sepeda Motor"
@@ -300,10 +305,10 @@ if st.session_state.page == "menu":
 
     st.write("")
     with st.container(border=True):
-      st.markdown("### 🚙 *Pick Up*")
+      st.markdown("### 🚙 Pick Up")
       st.write(
-          f"Total Unit: *{t_pickup:,} Data*\n\nTotal Nilai Aset:"
-          f" *{p_pickup}*"
+          f"Total Unit: {t_pickup:,} Data\n\nTotal Nilai Aset:"
+          f" {p_pickup}"
       )
       if st.button("Kelola Pick Up", key="btn_pickup"):
         st.session_state.keyword = "Pick Up"
@@ -342,7 +347,8 @@ elif st.session_state.page == "table":
       filtered_df = filtered_df[filtered_df["SKPD_Nama"] == pilih_skpd]
 
   search_query = st.text_input(
-      "🔍 Cari data (Merk, No. Polisi, Jenis, dll)..."
+      "🔍 Cari data (Merk, No. Polisi, No. Rangka, No. Mesin, No. BPKB,"
+      " dll)..."
   )
   if search_query:
     mask_search = (
