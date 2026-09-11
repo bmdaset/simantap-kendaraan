@@ -104,43 +104,68 @@ def load_data():
       return pd.DataFrame(), None
 
   try:
+    # Membaca seluruh sheet tanpa header fix untuk mendeteksi baris data secara dinamis
     df_raw = pd.read_excel(
         file_path, sheet_name="KENDARAAN DINAS", header=None
     )
 
-    columns_kib_b = [
-        "No. Urut",
-        "Kode Barang",
-        "Jenis Barang",
-        "Nomor Register",
-        "Merk / Type",
-        "Ukuran / CC",
-        "Bahan",
-        "Tahun Pembelian",
-        "Nomor Pabrik",
-        "Nomor Rangka",
-        "Nomor Mesin",
-        "Nomor Polisi",
-        "Nomor BPKB",
-        "Asal Usul",
-        "Jumlah / Satuan",
-        "Harga",
-        "Keterangan",
-        "Pengguna / Pemakai",
-        "SKPD",
-    ]
+    # Mencari baris header secara otomatis (mencari baris yang mengandung 'no' atau 'kode')
+    header_row_idx = 14  # Default posisi baris header KIB B standard
+    for idx, row in df_raw.head(20).iterrows():
+      row_str = " ".join([str(val).lower() for val in row.values])
+      if "no." in row_str or "kode" in row_str or "jenis barang" in row_str:
+        header_row_idx = idx
+        break
 
-    df = df_raw.iloc[15:].copy()
+    # Menggabungkan multi-header jika diperlukan atau ambil baris header langsung
+    raw_columns = (
+        df_raw.iloc[header_row_idx]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .tolist()
+    )
 
-    if df.shape[1] <= len(columns_kib_b):
-      df.columns = columns_kib_b[: df.shape[1]]
+    # Jika ada sub-header di bawahnya (misal baris header_row_idx + 1), kita kombinasikan agar lengkap
+    if header_row_idx + 1 < len(df_raw):
+      sub_columns = (
+          df_raw.iloc[header_row_idx + 1]
+          .fillna("")
+          .astype(str)
+          .str.strip()
+          .tolist()
+      )
+      combined_cols = []
+      last_main = ""
+      for m, s in zip(raw_columns, sub_columns):
+        if m != "" and not m.startswith("Unnamed"):
+          last_main = m
+        if s != "" and not s.startswith("Unnamed"):
+          if last_main and last_main.lower() not in s.lower():
+            combined_cols.append(f"{last_main} - {s}")
+          else:
+            combined_cols.append(s)
+        else:
+          combined_cols.append(last_main if last_main else "Kolom")
+      final_cols = combined_cols
+      data_start_idx = header_row_idx + 2
     else:
-      extra_cols = [
-          f"Kolom_{i}" for i in range(len(columns_kib_b), df.shape[1])
-      ]
-      df.columns = columns_kib_b + extra_cols
+      final_cols = raw_columns
+      data_start_idx = header_row_idx + 1
+
+    df = df_raw.iloc[data_start_idx:].copy()
+
+    # Pastikan jumlah kolom pas
+    if len(final_cols) >= df.shape[1]:
+      df.columns = final_cols[: df.shape[1]]
+    else:
+      extra = [f"Kolom_{i}" for i in range(len(final_cols), df.shape[1])]
+      df.columns = final_cols + extra
 
     df = df.reset_index(drop=True)
+
+    # Validasi baris aktif berdasarkan kolom pertama (No. Urut / Angka)
+    first_col = df.columns[0]
 
     def is_valid_row(val):
       try:
@@ -148,10 +173,10 @@ def load_data():
       except:
         return False
 
-    if "No. Urut" in df.columns:
-      df = df[df["No. Urut"].apply(is_valid_row)].reset_index(drop=True)
-      df["No. Urut"] = range(1, len(df) + 1)
+    df = df[df[first_col].apply(is_valid_row)].reset_index(drop=True)
+    df[first_col] = range(1, len(df) + 1)
 
+    # Pembersihan string & spasi ekstra di seluruh dataframe
     for col in df.columns:
       df[col] = (
           df[col]
@@ -162,8 +187,15 @@ def load_data():
           .str.strip()
       )
 
+    # Pencarian kolom SKPD / Dinas secara dinamis
     skpd_col = next(
-        (c for c in df.columns if "skpd" in c.lower() or "dinas" in c.lower()),
+        (
+            c
+            for c in df.columns
+            if "skpd" in c.lower()
+            or "dinas" in c.lower()
+            or "unit" in c.lower()
+        ),
         None,
     )
     if skpd_col:
@@ -178,8 +210,15 @@ def load_data():
     else:
       df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
+    # Pencarian kolom Harga / Nilai Aset secara dinamis
     harga_col = next(
-        (c for c in df.columns if "harga" in c.lower() or "rupiah" in c.lower()),
+        (
+            c
+            for c in df.columns
+            if "harga" in c.lower()
+            or "rupiah" in c.lower()
+            or "nilai" in c.lower()
+        ),
         None,
     )
     if harga_col:
@@ -189,6 +228,7 @@ def load_data():
     else:
       df["Harga_Clean"] = 0
 
+    # Deteksi Kategori Kendaraan Otomatis
     def deteksi_kategori(row):
       combined = " ".join(
           [str(val) for val in row.values if pd.notna(val)]
@@ -440,10 +480,20 @@ elif st.session_state.page == "table":
   st.markdown("---")
   st.markdown("#### 🔍 Preview Kartu Detail Bergaris & Download")
   if not display_df.empty:
+    # Cari kolom nomor polisi untuk label dropdown jika ada
+    nopol_col = next(
+        (c for c in display_df.columns if "polisi" in c.lower()),
+        display_df.columns[1] if len(display_df.columns) > 1 else display_df.columns[0],
+    )
+    merk_col = next(
+        (c for c in display_df.columns if "merk" in c.lower() or "type" in c.lower()),
+        display_df.columns[2] if len(display_df.columns) > 2 else display_df.columns[0],
+    )
+
     selected_row_idx = st.selectbox(
         "Pilih Kendaraan untuk Lihat Detail Lengkap:",
         options=display_df.index,
-        format_func=lambda x: f"Baris {x+1}: No. Polisi: {display_df.loc[x, 'Nomor Polisi'] if 'Nomor Polisi' in display_df.columns else display_df.iloc[x].values[0]} | Merk: {display_df.loc[x, 'Merk / Type'] if 'Merk / Type' in display_df.columns else ''}",
+        format_func=lambda x: f"Baris {x+1}: No. Polisi: {display_df.loc[x, nopol_col]} | Merk: {display_df.loc[x, merk_col]}",
     )
 
     if selected_row_idx is not None:
@@ -592,7 +642,7 @@ elif st.session_state.page == "table":
           fill = False
           for col, val in zip(cols, vals):
             if fill:
-              pdf.set_fill_color(240, 244, 248)
+              pdf.set_workflow_fill = pdf.set_fill_color(240, 244, 248)
             else:
               pdf.set_fill_color(255, 255, 255)
 
