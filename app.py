@@ -204,7 +204,7 @@ def load_all_data():
   except Exception as e:
     print("Error KENDARAAN:", e)
 
-  # 2. Load KIB A (KIB A TANAH) - Robust Header & Column Detection
+  # 2. Load KIB A (KIB A TANAH) - Clean Prefix Letak
   df_tanah = pd.DataFrame()
   try:
     df_raw_t = pd.read_excel(file_path, sheet_name="KIB A TANAH", header=None)
@@ -218,19 +218,37 @@ def load_all_data():
     df_t = pd.read_excel(
         file_path, sheet_name="KIB A TANAH", header=[h_idx_t, h_idx_t + 1]
     )
-    # Flatten MultiIndex columns if any
     df_t.columns = [
         " ".join([str(c) for c in col if "unnamed" not in str(c).lower()]).strip()
         for col in df_t.columns
     ]
-    # Fallback if flat columns are empty/messy, load with single header
     if len(df_t.columns) == 0 or all(c == "" for c in df_t.columns):
       df_t = pd.read_excel(
           file_path, sheet_name="KIB A TANAH", header=h_idx_t + 1
       )
 
     df_t = df_t.loc[:, ~df_t.columns.astype(str).str.contains("^Unnamed")]
-    df_t.columns = [str(c).strip() for c in df_t.columns]
+
+    # Remove 'Letak/' prefix except for 'Letak/ alamat'
+    cleaned_cols = []
+    for col in df_t.columns:
+      col_str = str(col).strip()
+      if (
+          col_str.lower().startswith("letak")
+          and "alamat" not in col_str.lower()
+      ):
+        cleaned = (
+            col_str.replace("Letak/", "")
+            .replace("letak/", "")
+            .replace("Letak /", "")
+            .replace("letak /", "")
+            .strip()
+        )
+        cleaned_cols.append(cleaned if cleaned else col_str)
+      else:
+        cleaned_cols.append(col_str)
+    df_t.columns = cleaned_cols
+
     df_t = df_t.dropna(how="all").reset_index(drop=True)
 
     first_col_t = df_t.columns[0]
