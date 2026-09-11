@@ -125,70 +125,36 @@ def load_all_data():
     else:
       return pd.DataFrame(), pd.DataFrame(), None
 
-  # 1. Load KIB B (KENDARAAN DINAS) Sesuai Format Asli Excel & Permendagri (Multi-row Header)
+  # 1. Load KIB B (KENDARAAN DINAS) - Diperbaiki agar tidak membuang baris data
   df_kendaraan = pd.DataFrame()
   try:
     df_raw_k = pd.read_excel(
         file_path, sheet_name="KENDARAAN DINAS", header=None
     )
-    h_idx_k = 15
-    for idx, row in df_raw_k.head(25).iterrows():
+    h_idx_k = 12
+    for idx, row in df_raw_k.head(20).iterrows():
       txt = " ".join(str(v) for v in row.values).lower()
       if (
           "kode barang" in txt
-          or "jenis" in txt
           or "merk" in txt
           or "nomor" in txt
+          or "jenis" in txt
       ):
         h_idx_k = idx
         break
 
-    df_k = pd.read_excel(
-        file_path, sheet_name="KENDARAAN DINAS", header=[h_idx_k, h_idx_k + 1]
-    )
-    df_k.columns = [
-        " ".join([str(c) for c in col if "unnamed" not in str(c).lower()]).strip()
-        for col in df_k.columns
-    ]
-    if len(df_k.columns) == 0 or all(c == "" for c in df_k.columns):
-      df_k = pd.read_excel(
-          file_path, sheet_name="KENDARAAN DINAS", header=h_idx_k + 1
-      )
-
+    df_k = pd.read_excel(file_path, sheet_name="KENDARAAN DINAS", header=h_idx_k)
     df_k = df_k.loc[:, ~df_k.columns.astype(str).str.contains("^Unnamed")]
     df_k = df_k.dropna(how="all").reset_index(drop=True)
 
-    first_col = df_k.columns[0]
+    # Bersihkan nama kolom
+    df_k.columns = [str(c).strip() for c in df_k.columns]
+
+    # Ambil baris yang memiliki data kendaraan (misal kolom merk/type atau harga tidak kosong)
     df_k = df_k[
-        df_k[first_col].apply(
-            lambda x: str(x).strip().replace(".0", "").isdigit()
-            if pd.notna(x)
-            else False
-        )
+        df_k.iloc[:, 0].notna()
+        & (df_k.iloc[:, 0].astype(str).str.strip() != "")
     ].reset_index(drop=True)
-
-    rename_k = {}
-    for col in df_k.columns:
-      cl = col.lower()
-      if cl in ["no", "no.", "nomor urut"]:
-        rename_k[col] = "No. Urut"
-      elif "kode" in cl:
-        rename_k[col] = "Kode Barang"
-      elif cl in ["nomor register", "register"]:
-        rename_k[col] = "Nomor Register"
-    df_k = df_k.rename(columns=rename_k)
-
-    if "No. Urut" in df_k.columns:
-      df_k["No. Urut"] = range(1, len(df_k) + 1)
-
-    for col in df_k.columns:
-      df_k[col] = (
-          df_k[col]
-          .astype(str)
-          .str.replace(r"\.0+$", "", regex=True)
-          .replace("nan", "")
-          .replace("None", "")
-      )
 
     skpd_col_k = next(
         (c for c in df_k.columns if "skpd" in c.lower() or "dinas" in c.lower()),
@@ -213,14 +179,15 @@ def load_all_data():
         ),
         None,
     )
-    df_k["Harga_Clean"] = (
-        pd.to_numeric(
-            df_k[harga_col_k].str.replace(r"[^\d.]", "", regex=True),
-            errors="coerce",
-        ).fillna(0)
-        if harga_col_k
-        else 0
-    )
+    if harga_col_k:
+      df_k["Harga_Clean"] = pd.to_numeric(
+          df_k[harga_col_k]
+          .astype(str)
+          .str.replace(r"[^\d.]", "", regex=True),
+          errors="coerce",
+      ).fillna(0)
+    else:
+      df_k["Harga_Clean"] = 0
 
     def deteksi_kategori(row):
       combined = " ".join(
@@ -276,12 +243,12 @@ def load_all_data():
   except Exception as e:
     print("Error KENDARAAN:", e)
 
-  # 2. Load KIB A (KIB A TANAH) Sesuai Format Standar Mendagri & Database Excel
+  # 2. Load KIB A (KIB A TANAH)
   df_tanah = pd.DataFrame()
   try:
     df_raw_t = pd.read_excel(file_path, sheet_name="KIB A TANAH", header=None)
     h_idx_t = 0
-    for idx, row in df_raw_t.head(25).iterrows():
+    for idx, row in df_raw_t.head(20).iterrows():
       txt = " ".join(str(v) for v in row.values).lower()
       if (
           "luas" in txt
@@ -292,52 +259,15 @@ def load_all_data():
         h_idx_t = idx
         break
 
-    df_t = pd.read_excel(
-        file_path, sheet_name="KIB A TANAH", header=[h_idx_t, h_idx_t + 1]
-    )
-    df_t.columns = [
-        " ".join([str(c) for c in col if "unnamed" not in str(c).lower()]).strip()
-        for col in df_t.columns
-    ]
-    if len(df_t.columns) == 0 or all(c == "" for c in df_t.columns):
-      df_t = pd.read_excel(
-          file_path, sheet_name="KIB A TANAH", header=h_idx_t + 1
-      )
-
+    df_t = pd.read_excel(file_path, sheet_name="KIB A TANAH", header=h_idx_t)
     df_t = df_t.loc[:, ~df_t.columns.astype(str).str.contains("^Unnamed")]
     df_t = df_t.dropna(how="all").reset_index(drop=True)
+    df_t.columns = [str(c).strip() for c in df_t.columns]
 
-    first_col_t = df_t.columns[0]
     df_t = df_t[
-        df_t[first_col_t].apply(
-            lambda x: str(x).strip().replace(".0", "").isdigit()
-            if pd.notna(x)
-            else False
-        )
+        df_t.iloc[:, 0].notna()
+        & (df_t.iloc[:, 0].astype(str).str.strip() != "")
     ].reset_index(drop=True)
-
-    rename_t = {}
-    for col in df_t.columns:
-      cl = col.lower()
-      if cl in ["no", "no.", "nomor urut"]:
-        rename_t[col] = "No. Urut"
-      elif "kode" in cl:
-        rename_t[col] = "Kode Barang"
-      elif cl in ["nomor", "no. register", "register"]:
-        rename_t[col] = "Nomor Register"
-    df_t = df_t.rename(columns=rename_t)
-
-    if "No. Urut" in df_t.columns:
-      df_t["No. Urut"] = range(1, len(df_t) + 1)
-
-    for col in df_t.columns:
-      df_t[col] = (
-          df_t[col]
-          .astype(str)
-          .str.replace(r"\.0+$", "", regex=True)
-          .replace("nan", "")
-          .replace("None", "")
-      )
 
     skpd_col_t = next(
         (
@@ -366,14 +296,15 @@ def load_all_data():
         ),
         None,
     )
-    df_t["Harga_Clean"] = (
-        pd.to_numeric(
-            df_t[harga_col_t].str.replace(r"[^\d.]", "", regex=True),
-            errors="coerce",
-        ).fillna(0)
-        if harga_col_t
-        else 0
-    )
+    if harga_col_t:
+      df_t["Harga_Clean"] = pd.to_numeric(
+          df_t[harga_col_t]
+          .astype(str)
+          .str.replace(r"[^\d.]", "", regex=True),
+          errors="coerce",
+      ).fillna(0)
+    else:
+      df_t["Harga_Clean"] = 0
 
     def deteksi_kategori_tanah(row):
       combined = " ".join(
@@ -393,21 +324,8 @@ def load_all_data():
           ]
       ):
         return "Tanah Kantor / Bangunan"
-      elif any(
-          k in combined
-          for k in [
-              "lapangan",
-              "fasum",
-              "fassos",
-              "taman",
-              "pertanian",
-              "kebun",
-              "kosong",
-          ]
-      ):
-        return "Tanah Fasum / Lapangan / Lainnya"
       else:
-        return "Tanah Kantor / Bangunan"
+        return "Tanah Fasum / Lapangan / Lainnya"
 
     df_t["Kategori_Tanah"] = df_t.apply(deteksi_kategori_tanah, axis=1)
     df_tanah = df_t
@@ -594,7 +512,7 @@ elif st.session_state.page == "sub_menu_tanah":
 
   st.markdown(
       "<h4 style='text-align:center; color:#1e293b; margin-bottom:25px;"
-      " font-weight:700;'>Pilih Kategori KIB A - Tanah (Standar Mendagri)</h4>",
+      " font-weight:700;'>Pilih Kategori KIB A - Tanah</h4>",
       unsafe_allow_html=True,
   )
 
