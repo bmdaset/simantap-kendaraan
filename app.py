@@ -150,7 +150,6 @@ def load_kendaraan_data():
         seen[c] = 0
         unique_cols.append(c)
 
-    # Menggunakan batas persis tanpa membaca baris kosong berlebih di bawah
     df = df_raw.iloc[data_start_idx:].copy()
     df.columns = unique_cols[: df.shape[1]]
     if df.shape[1] > len(unique_cols):
@@ -161,9 +160,17 @@ def load_kendaraan_data():
     valid_drop_indices = [i for i in drop_indices if i < len(df.columns)]
     df = df.drop(df.columns[valid_drop_indices], axis=1).reset_index(drop=True)
     df = df.dropna(how="all").reset_index(drop=True)
-
-    # Membuang baris kosong atau baris rekap bawah jika ada
     df = df[df.iloc[:, 0].notna()].reset_index(drop=True)
+
+    # Filter buang baris total / jumlah di bagian bawah
+    if not df.empty:
+      first_col_name = df.columns[0]
+      df = df[
+          ~df[first_col_name]
+          .astype(str)
+          .str.lower()
+          .str.contains("jumlah|total|n o", na=False)
+      ].reset_index(drop=True)
 
     df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
     df["Harga_Clean"] = 0.0
@@ -298,7 +305,7 @@ def load_kiba_data():
 
     df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
 
-    # Deteksi baris header KIB A secara persis seperti struktur Kendaraan Dinas (mendukung 2 baris header jika ada)
+    # Deteksi baris header KIB A secara akurat
     header_row_idx = 0
     for idx, row in df_raw.head(20).iterrows():
       row_str = " ".join([str(val).lower() for val in row.values])
@@ -307,7 +314,6 @@ def load_kiba_data():
           or "alamat" in row_str
           or "letak" in row_str
           or "hak" in row_str
-          or "barang" in row_str
       ):
         header_row_idx = idx
         break
@@ -327,20 +333,32 @@ def load_kiba_data():
           .str.strip()
           .tolist()
       )
-      combined_cols = []
-      last_main = ""
-      for m, s in zip(h1, h2):
-        if m != "" and not m.startswith("Unnamed"):
-          last_main = m
-        if s != "" and not s.startswith("Unnamed"):
-          if last_main and last_main.lower() not in s.lower():
-            combined_cols.append(f"{last_main} - {s}")
+      # Cek apakah baris setelahnya masih bagian dari header (misal sub-kolom KIB)
+      row_str_h2 = " ".join([str(v).lower() for v in h2])
+      if (
+          "m2" in row_str_h2
+          or "status" in row_str_h2
+          or "tanggal" in row_str_h2
+          or "nomor" in row_str_h2
+          or "sertifikat" in row_str_h2
+      ):
+        combined_cols = []
+        last_main = ""
+        for m, s in zip(h1, h2):
+          if m != "" and not m.startswith("Unnamed"):
+            last_main = m
+          if s != "" and not s.startswith("Unnamed"):
+            if last_main and last_main.lower() not in s.lower():
+              combined_cols.append(f"{last_main} - {s}")
+            else:
+              combined_cols.append(s)
           else:
-            combined_cols.append(s)
-        else:
-          combined_cols.append(last_main if last_main else "Kolom")
-      final_cols = combined_cols
-      data_start_idx = header_row_idx + 2
+            combined_cols.append(last_main if last_main else "Kolom")
+        final_cols = combined_cols
+        data_start_idx = header_row_idx + 2
+      else:
+        final_cols = h1
+        data_start_idx = header_row_idx + 1
     else:
       final_cols = h1
       data_start_idx = header_row_idx + 1
@@ -363,6 +381,15 @@ def load_kiba_data():
 
     df = df.dropna(how="all").reset_index(drop=True)
     df = df[df.iloc[:, 0].notna()].reset_index(drop=True)
+
+    if not df.empty:
+      first_col_name = df.columns[0]
+      df = df[
+          ~df[first_col_name]
+          .astype(str)
+          .str.lower()
+          .str.contains("jumlah|total|n o", na=False)
+      ].reset_index(drop=True)
 
     df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
     df["Harga_Clean"] = 0.0
@@ -517,7 +544,6 @@ elif st.session_state.page == "table":
     if pilih_skpd != "Semua SKPD":
       active_df = active_df[active_df["SKPD_Nama"] == pilih_skpd]
 
-  # Searching khusus untuk KIB A Tanah memfokuskan pencarian pada Alamat dan Keterangan
   if st.session_state.module == "tanah":
     search_query = st.text_input(
         "🔍 Cari KIB A Tanah (Berdasarkan Alamat, Keterangan, No. Sertifikat,"
@@ -559,6 +585,14 @@ elif st.session_state.page == "table":
       st.dataframe(summary_kat, use_container_width=True)
     else:
       st.info("Tidak ada data untuk kategori ini.")
+  else:
+    st.markdown(f"#### 📊 Ringkasan Jumlah Bidang Tanah per SKPD")
+    if not active_df.empty and "SKPD_Nama" in active_df.columns:
+      summary_tanah = active_df["SKPD_Nama"].value_counts().reset_index()
+      summary_tanah.columns = ["Nama SKPD / Dinas", "Jumlah Bidang Tanah"]
+      st.dataframe(summary_tanah, use_container_width=True)
+    else:
+      st.info("Tidak ada data ringkasan tanah.")
 
   st.markdown("---")
   st.markdown("#### 🔍 Preview Kartu Detail Bergaris & Download")
