@@ -17,42 +17,104 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Background Utama Aplikasi - Gradasi Berwarna Elegan */
     .stApp {
-        background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     }
+
+    /* Header Utama */
     .main-header {
-        background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
-        padding: 30px;
-        border-radius: 16px;
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        padding: 32px;
+        border-radius: 18px;
         color: white;
         text-align: center;
-        margin-bottom: 25px;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.25);
+        margin-bottom: 30px;
+        box-shadow: 0 10px 30px rgba(30, 60, 114, 0.3);
+        border: 1px solid rgba(255,255,255,0.2);
     }
-    .kib-card-kendaraan {
+    .main-header h2 {
+        margin: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .main-header p {
+        margin: 10px 0 0 0;
+        font-size: 16px;
+        opacity: 0.95;
+        font-weight: 300;
+    }
+
+    /* Kartu Menu KIB Utama & Kategori (Berwarna & Elegan) */
+    .kib-card-kib-b {
         background: linear-gradient(135deg, #2b5876 0%, #4e4376 100%);
-        padding: 22px;
-        border-radius: 14px;
+        padding: 26px;
+        border-radius: 16px;
         color: white;
-        box-shadow: 0 6px 20px rgba(43, 88, 118, 0.35);
-        margin-bottom: 15px;
+        box-shadow: 0 8px 22px rgba(43, 88, 118, 0.4);
+        margin-bottom: 20px;
+        border: 1px solid rgba(255,255,255,0.25);
+        transition: transform 0.3s ease;
     }
-    .kib-card-tanah {
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        padding: 22px;
-        border-radius: 14px;
+    .kib-card-kib-a {
+        background: linear-gradient(135deg, #134e5e 0%, #71b280 100%);
+        padding: 26px;
+        border-radius: 16px;
         color: white;
-        box-shadow: 0 6px 20px rgba(17, 153, 142, 0.35);
-        margin-bottom: 15px;
+        box-shadow: 0 8px 22px rgba(19, 78, 94, 0.4);
+        margin-bottom: 20px;
+        border: 1px solid rgba(255,255,255,0.25);
+        transition: transform 0.3s ease;
     }
+    .kib-card-sub-1 {
+        background: linear-gradient(135deg, #4e54c8 0%, #8f94fb 100%);
+        padding: 24px;
+        border-radius: 16px;
+        color: white;
+        box-shadow: 0 6px 18px rgba(78, 84, 200, 0.35);
+        margin-bottom: 20px;
+    }
+    .kib-card-sub-2 {
+        background: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%);
+        padding: 24px;
+        border-radius: 16px;
+        color: white;
+        box-shadow: 0 6px 18px rgba(255, 126, 95, 0.35);
+        margin-bottom: 20px;
+    }
+    .kib-card-sub-3 {
+        background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+        padding: 24px;
+        border-radius: 16px;
+        color: white;
+        box-shadow: 0 6px 18px rgba(0, 114, 255, 0.35);
+        margin-bottom: 20px;
+    }
+    .kib-card-sub-4 {
+        background: linear-gradient(135deg, #f7b733 0%, #fc4a1a 100%);
+        padding: 24px;
+        border-radius: 16px;
+        color: white;
+        box-shadow: 0 6px 18px rgba(247, 183, 51, 0.35);
+        margin-bottom: 20px;
+    }
+
+    /* Styling Tombol Umum */
     .stButton>button {
         width: 100%;
         border-radius: 10px;
         font-weight: 600;
-        padding: 10px;
-        font-size: 14px;
+        padding: 12px;
+        font-size: 15px;
+        transition: all 0.3s ease;
         border: none;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .stButton>button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.25);
     }
     </style>
 """,
@@ -70,7 +132,7 @@ def load_all_data():
     else:
       return pd.DataFrame(), pd.DataFrame(), None
 
-  # 1. Load KIB B (KENDARAAN DINAS) Sesuai Format Asli Excel & Permendagri
+  # 1. Load KIB B (KENDARAAN DINAS) Sesuai Format Asli Excel & Permendagri (TIDAK DIUBAH)
   df_kendaraan = pd.DataFrame()
   try:
     df_raw_k = pd.read_excel(
@@ -195,54 +257,38 @@ def load_all_data():
   except Exception as e:
     print("Error KENDARAAN:", e)
 
-  # 2. Load KIB A (KIB A TANAH) - Dipertahankan Sesuai Script Asli Tanpa Ubah
+  # 2. Load KIB A (KIB A TANAH) Sesuai Format Standar Mendagri & Database Excel
   df_tanah = pd.DataFrame()
   try:
     df_raw_t = pd.read_excel(file_path, sheet_name="KIB A TANAH", header=None)
     h_idx_t = 0
-    for idx, row in df_raw_t.head(20).iterrows():
+    for idx, row in df_raw_t.head(25).iterrows():
       txt = " ".join(str(v) for v in row.values).lower()
-      if "luas" in txt or "letak" in txt or "hak" in txt:
+      if (
+          "luas" in txt
+          or "letak" in txt
+          or "hak" in txt
+          or "kode barang" in txt
+      ):
         h_idx_t = idx
         break
 
     df_t = pd.read_excel(
-        file_path, sheet_name="KIB A TANAH", header=[h_idx_t, h_idx_t + 1]
+        file_path, sheet_name="KIB A TANAH", header=h_idx_t
     )
-    df_t.columns = [
-        " ".join([str(c) for c in col if "unnamed" not in str(c).lower()]).strip()
-        for col in df_t.columns
-    ]
-    if len(df_t.columns) == 0 or all(c == "" for c in df_t.columns):
-      df_t = pd.read_excel(
-          file_path, sheet_name="KIB A TANAH", header=h_idx_t + 1
-      )
-
     df_t = df_t.loc[:, ~df_t.columns.astype(str).str.contains("^Unnamed")]
+    df_t.columns = [str(c).strip() for c in df_t.columns]
     df_t = df_t.dropna(how="all").reset_index(drop=True)
 
     first_col_t = df_t.columns[0]
-    df_t = df_t[
-        df_t[first_col_t].apply(
-            lambda x: str(x).strip().replace(".0", "").isdigit()
-            if pd.notna(x)
-            else False
-        )
-    ].reset_index(drop=True)
 
-    rename_t = {}
-    for col in df_t.columns:
-      cl = col.lower()
-      if cl in ["no", "no.", "nomor urut"]:
-        rename_t[col] = "No. Urut"
-      elif "kode" in cl:
-        rename_t[col] = "Kode Barang"
-      elif cl in ["nomor", "no. register", "register"]:
-        rename_t[col] = "Nomor Register"
-    df_t = df_t.rename(columns=rename_t)
+    def is_valid_row_t(val):
+      try:
+        return int(float(val)) > 0
+      except:
+        return False
 
-    if "No. Urut" in df_t.columns:
-      df_t["No. Urut"] = range(1, len(df_t) + 1)
+    df_t = df_t[df_t[first_col_t].apply(is_valid_row_t)].reset_index(drop=True)
 
     for col in df_t.columns:
       df_t[col] = (
@@ -254,7 +300,11 @@ def load_all_data():
       )
 
     skpd_col_t = next(
-        (c for c in df_t.columns if "skpd" in c.lower() or "dinas" in c.lower()),
+        (
+            c
+            for c in df_t.columns
+            if "skpd" in c.lower() or "dinas" in c.lower()
+        ),
         None,
     )
     df_t["SKPD_Nama"] = (
@@ -284,6 +334,42 @@ def load_all_data():
         if harga_col_t
         else 0
     )
+
+    def deteksi_kategori_tanah(row):
+      combined = " ".join(
+          [str(val) for val in row.values if pd.notna(val)]
+      ).lower()
+      if any(
+          k in combined
+          for k in [
+              "kantor",
+              "gedung",
+              "bangunan",
+              "pemerintahan",
+              "dinas",
+              "puskesmas",
+              "sekolah",
+              "kecamatan",
+          ]
+      ):
+        return "Tanah Kantor / Bangunan"
+      elif any(
+          k in combined
+          for k in [
+              "lapangan",
+              "fasum",
+              "fassos",
+              "taman",
+              "pertanian",
+              "kebun",
+              "kosong",
+          ]
+      ):
+        return "Tanah Fasum / Lapangan / Lainnya"
+      else:
+        return "Tanah Kantor / Bangunan"
+
+    df_t["Kategori_Tanah"] = df_t.apply(deteksi_kategori_tanah, axis=1)
     df_tanah = df_t
   except Exception as e:
     print("Error KIB A:", e)
@@ -312,7 +398,7 @@ st.markdown(
     """
     <div class="main-header">
         <h2>🏛️ SIMANTAP - MANAJEMEN ASET DAERAH</h2>
-        <p>Sistem Informasi Manajemen Aset & Inventaris Pemerintah Daerah</p>
+        <p>Sistem Informasi Manajemen Aset & Inventaris Pemerintah Daerah (KIB A & KIB B)</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -320,7 +406,7 @@ st.markdown(
 
 if st.session_state.page == "menu":
   st.markdown(
-      "<h4 style='text-align:center; color:#1f2937; margin-bottom:20px;"
+      "<h4 style='text-align:center; color:#1e293b; margin-bottom:25px;"
       " font-weight:700;'>Silakan Pilih Modul KIB Aset Daerah</h4>",
       unsafe_allow_html=True,
   )
@@ -335,10 +421,10 @@ if st.session_state.page == "menu":
   with col1:
     st.markdown(
         f"""
-        <div class="kib-card-kendaraan">
-            <h3>🚗 KIB B - Kendaraan Dinas</h3>
+        <div class="kib-card-kib-b">
+            <h3>🚗 KIB B - Kendaraan Dinas (Peralatan & Mesin)</h3>
             <p>Total Unit: <b>{len_k:,} Data</b><br>
-            Total Nilai: <b>{format_rupiah(tot_val_k)}</b></p>
+            Total Nilai Aset: <b>{format_rupiah(tot_val_k)}</b></p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -351,29 +437,29 @@ if st.session_state.page == "menu":
   with col2:
     st.markdown(
         f"""
-        <div class="kib-card-tanah">
-            <h3>🗺️ KIB A - Tanah</h3>
+        <div class="kib-card-kib-a">
+            <h3>🗺️ KIB A - Tanah (Sesuai Format Mendagri)</h3>
             <p>Total Bidang: <b>{len_t:,} Data</b><br>
-            Total Nilai: <b>{format_rupiah(tot_val_t)}</b></p>
+            Total Nilai Aset: <b>{format_rupiah(tot_val_t)}</b></p>
         </div>
         """,
         unsafe_allow_html=True,
     )
     if st.button("Kelola KIB A (Tanah)", key="btn_kib_a"):
       st.session_state.module = "tanah"
-      st.session_state.keyword = ""
-      st.session_state.title = "KIB A - Tanah"
-      st.session_state.page = "table"
+      st.session_state.page = "sub_menu_tanah"
       st.rerun()
 
 elif st.session_state.page == "sub_menu_kendaraan":
-  if st.button("⬅️ Kembali ke Menu Utama"):
-    st.session_state.page = "menu"
-    st.rerun()
+  col_back, _ = st.columns([1.5, 8.5])
+  with col_back:
+    if st.button("⬅️ Kembali ke Menu Utama"):
+      st.session_state.page = "menu"
+      st.rerun()
 
   st.markdown(
-      "<h4 style='text-align:center; color:#1f2937; margin-bottom:20px;"
-      " font-weight:700;'>Pilih Kategori Kendaraan Dinas</h4>",
+      "<h4 style='text-align:center; color:#1e293b; margin-bottom:25px;"
+      " font-weight:700;'>Pilih Kategori Kendaraan Dinas (KIB B)</h4>",
       unsafe_allow_html=True,
   )
 
@@ -398,9 +484,9 @@ elif st.session_state.page == "sub_menu_kendaraan":
   with c1:
     st.markdown(
         f"""
-        <div class="kib-card-kendaraan" style="background: linear-gradient(135deg, #3a6073 0%, #16222a 100%);">
+        <div class="kib-card-sub-1">
             <h3>📦 Semua Kendaraan Dinas</h3>
-            <p>Total Unit: <b>{t_semua:,} Data</b> | Total Nilai: <b>{p_semua}</b></p>
+            <p>Total Unit: <b>{t_semua:,} Data</b><br>Total Nilai: <b>{p_semua}</b></p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -411,11 +497,12 @@ elif st.session_state.page == "sub_menu_kendaraan":
       st.session_state.page = "table"
       st.rerun()
 
+    st.write("")
     st.markdown(
         f"""
-        <div class="kib-card-kendaraan" style="background: linear-gradient(135deg, #1d976c 0%, #939b62 100%); margin-top:15px;">
+        <div class="kib-card-sub-2">
             <h3>🚗 Mobil Dinas</h3>
-            <p>Total Unit: <b>{t_mobil:,} Data</b> | Total Nilai: <b>{p_mobil}</b></p>
+            <p>Total Unit: <b>{t_mobil:,} Data</b><br>Total Nilai: <b>{p_mobil}</b></p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -429,9 +516,9 @@ elif st.session_state.page == "sub_menu_kendaraan":
   with c2:
     st.markdown(
         f"""
-        <div class="kib-card-kendaraan" style="background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);">
+        <div class="kib-card-sub-3">
             <h3>🏍️ Sepeda Motor Dinas</h3>
-            <p>Total Unit: <b>{t_motor:,} Data</b> | Total Nilai: <b>{p_motor}</b></p>
+            <p>Total Unit: <b>{t_motor:,} Data</b><br>Total Nilai: <b>{p_motor}</b></p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -442,11 +529,12 @@ elif st.session_state.page == "sub_menu_kendaraan":
       st.session_state.page = "table"
       st.rerun()
 
+    st.write("")
     st.markdown(
         f"""
-        <div class="kib-card-kendaraan" style="background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%); margin-top:15px;">
+        <div class="kib-card-sub-4">
             <h3>🚙 Pick Up / Kendaraan Khusus</h3>
-            <p>Total Unit: <b>{t_pickup:,} Data</b> | Total Nilai: <b>{p_pickup}</b></p>
+            <p>Total Unit: <b>{t_pickup:,} Data</b><br>Total Nilai: <b>{p_pickup}</b></p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -457,6 +545,84 @@ elif st.session_state.page == "sub_menu_kendaraan":
       st.session_state.page = "table"
       st.rerun()
 
+elif st.session_state.page == "sub_menu_tanah":
+  col_back, _ = st.columns([1.5, 8.5])
+  with col_back:
+    if st.button("⬅️ Kembali ke Menu Utama"):
+      st.session_state.page = "menu"
+      st.rerun()
+
+  st.markdown(
+      "<h4 style='text-align:center; color:#1e293b; margin-bottom:25px;"
+      " font-weight:700;'>Pilih Kategori KIB A - Tanah (Standar Mendagri)</h4>",
+      unsafe_allow_html=True,
+  )
+
+
+  def hitung_sub_t(kat):
+    if df_tanah.empty:
+      return format_rupiah(0), 0
+    sub = (
+        df_tanah
+        if kat == ""
+        else df_tanah[df_tanah["Kategori_Tanah"] == kat]
+    )
+    return format_rupiah(sub["Harga_Clean"].sum()), len(sub)
+
+
+  p_t_semua, t_t_semua = hitung_sub_t("")
+  p_t_kantor, t_t_kantor = hitung_sub_t("Tanah Kantor / Bangunan")
+  p_t_fasum, t_t_fasum = hitung_sub_t("Tanah Fasum / Lapangan / Lainnya")
+
+  c1, c2 = st.columns(2, gap="large")
+  with c1:
+    st.markdown(
+        f"""
+        <div class="kib-card-sub-1">
+            <h3>🗺️ Semua Bidang Tanah</h3>
+            <p>Total Bidang: <b>{t_t_semua:,} Data</b><br>Total Nilai: <b>{p_t_semua}</b></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Buka Semua Tanah", key="sub_t_semua"):
+      st.session_state.keyword = ""
+      st.session_state.title = "Semua KIB A - Tanah"
+      st.session_state.page = "table"
+      st.rerun()
+
+    st.write("")
+    st.markdown(
+        f"""
+        <div class="kib-card-sub-3">
+            <h3>🏢 Tanah Kantor / Gedung / Pemerintahan</h3>
+            <p>Total Bidang: <b>{t_t_kantor:,} Data</b><br>Total Nilai: <b>{p_t_kantor}</b></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Buka Tanah Kantor", key="sub_t_kantor"):
+      st.session_state.keyword = "Tanah Kantor / Bangunan"
+      st.session_state.title = "Tanah Kantor / Bangunan"
+      st.session_state.page = "table"
+      st.rerun()
+
+  with c2:
+    st.markdown(
+        f"""
+        <div class="kib-card-sub-2">
+            <h3>🌳 Tanah Fasum / Lapangan / Lainnya</h3>
+            <p>Total Bidang: <b>{t_t_fasum:,} Data</b><br>Total Nilai: <b>{p_t_fasum}</b></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Buka Tanah Fasum", key="sub_t_fasum"):
+      st.session_state.keyword = "Tanah Fasum / Lapangan / Lainnya"
+      st.session_state.title = "Tanah Fasum / Lapangan / Lainnya"
+      st.session_state.page = "table"
+      st.rerun()
+
 elif st.session_state.page == "table":
   col_back, col_ref, _ = st.columns([1.5, 1.5, 7])
   with col_back:
@@ -464,7 +630,7 @@ elif st.session_state.page == "table":
       if st.session_state.module == "kendaraan":
         st.session_state.page = "sub_menu_kendaraan"
       else:
-        st.session_state.page = "menu"
+        st.session_state.page = "sub_menu_tanah"
       st.rerun()
   with col_ref:
     if st.button("🔄 Refresh Data"):
@@ -483,7 +649,12 @@ elif st.session_state.page == "table":
     )
   else:
     df_active = df_tanah
-    filtered_df = df_active
+    keyword = st.session_state.keyword
+    filtered_df = (
+        df_active
+        if keyword == ""
+        else df_active[df_active["Kategori_Tanah"] == keyword]
+    )
 
   pilih_skpd = "Semua SKPD"
   if not filtered_df.empty:
@@ -496,7 +667,7 @@ elif st.session_state.page == "table":
     if pilih_skpd != "Semua SKPD":
       filtered_df = filtered_df[filtered_df["SKPD_Nama"] == pilih_skpd]
 
-  search_query = st.text_input("🔍 Cari data berdasarkan Nomor, Merk, dll...")
+  search_query = st.text_input("🔍 Cari data berdasarkan Nomor, Merk, Alamat, dll...")
   if search_query:
     mask_search = (
         filtered_df.astype(str)
@@ -514,7 +685,12 @@ elif st.session_state.page == "table":
       f" {len(df_active)} baris) | File: {os.path.basename(file_path)}"
   )
 
-  columns_to_drop = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"]
+  columns_to_drop = [
+      "Harga_Clean",
+      "Kategori_Jenis",
+      "Kategori_Tanah",
+      "SKPD_Nama",
+  ]
   display_df = filtered_df.drop(
       columns=[c for c in columns_to_drop if c in filtered_df.columns],
       errors="ignore",
@@ -523,13 +699,14 @@ elif st.session_state.page == "table":
   st.dataframe(display_df, use_container_width=True, height=400)
 
   st.markdown("---")
-  st.markdown("#### 🔍 Preview Kartu Detail & Download Laporan")
+  st.markdown("#### 🔍 Preview Kartu Detail Bergaris & Download Laporan")
   if not display_df.empty:
     selected_row_idx = st.selectbox(
         "Pilih Data untuk Lihat Detail Lengkap:",
         options=display_df.index,
         format_func=lambda x: (
-            f"Baris {x+1}: {display_df.iloc[x].values[1] if len(display_df.columns) > 1 else display_df.iloc[x].values[0]}"
+            f"Baris {x+1}:"
+            f" {display_df.iloc[x].values[1] if len(display_df.columns) > 1 else display_df.iloc[x].values[0]}"
         ),
     )
 
@@ -538,74 +715,157 @@ elif st.session_state.page == "table":
       columns_list = list(display_df.columns)
       values_list = [row_data[col] for col in columns_list]
 
+      mod_title = (
+          "KIB B (Peralatan & Mesin)"
+          if st.session_state.module == "kendaraan"
+          else "KIB A (Tanah)"
+      )
       detail_df = pd.DataFrame({
-          "Atribut / Kolom Database Excel": columns_list,
+          f"Atribut / Kolom Regulasi {mod_title}": columns_list,
           "Keterangan / Isi Data": values_list,
       })
 
-      st.dataframe(detail_df, use_container_width=True, height=400)
+      styled_preview = (
+          detail_df.style.set_table_styles([
+              {
+                  "selector": "th",
+                  "props": [
+                      ("background-color", "#1e3c72"),
+                      ("color", "white"),
+                      ("font-weight", "bold"),
+                      ("border", "1px solid #0f172a"),
+                      ("text-align", "center"),
+                  ],
+              },
+              {
+                  "selector": "td",
+                  "props": [
+                      ("border", "1px solid #cbd5e1"),
+                      ("padding", "8px 12px"),
+                  ],
+              },
+          ])
+          .set_properties(**{"text-align": "left"})
+          .hide(axis="index")
+      )
+
+      st.dataframe(styled_preview, use_container_width=True, height=420)
 
       col_e1, col_e2, col_e3 = st.columns(3)
       with col_e1:
 
-        def create_excel(cols, vals):
-          card_df = pd.DataFrame(
-              {"Atribut / Kolom Database": cols, "Keterangan": vals}
-          )
+        def create_styled_vertical_excel(cols, vals, title_mod):
+          card_df = pd.DataFrame({
+              f"Atribut / Kolom {title_mod}": cols,
+              "Keterangan / Isi Data": vals,
+          })
           output = BytesIO()
           with pd.ExcelWriter(output, engine="openpyxl") as writer:
             card_df.to_excel(writer, index=False, sheet_name="Detail Aset")
           output.seek(0)
-          return output.getvalue()
+          wb = openpyxl.load_workbook(output)
+          ws = wb.active
+          thin_border = Border(
+              left=Side(style="thin", color="888888"),
+              right=Side(style="thin", color="888888"),
+              top=Side(style="thin", color="888888"),
+              bottom=Side(style="thin", color="888888"),
+          )
+          header_fill = PatternFill(
+              start_color="1E3C72", end_color="1E3C72", fill_type="solid"
+          )
+          header_font = Font(
+              name="Calibri", size=11, bold=True, color="FFFFFF"
+          )
+          fill_even = PatternFill(
+              start_color="F1F5F9", end_color="F1F5F9", fill_type="solid"
+          )
 
+          for col_idx in range(1, 3):
+            cell = ws.cell(row=1, column=col_idx)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(
+                horizontal="center", vertical="center", wrap_text=True
+            )
+            cell.border = Border(
+                left=Side(style="thin", color="000000"),
+                right=Side(style="thin", color="000000"),
+                top=Side(style="thin", color="000000"),
+                bottom=Side(style="thin", color="000000"),
+            )
+
+          for row_idx in range(2, ws.max_row + 1):
+            is_even = row_idx % 2 == 0
+            for col_idx in range(1, 3):
+              cell = ws.cell(row=row_idx, column=col_idx)
+              cell.border = thin_border
+              cell.alignment = Alignment(vertical="center", wrap_text=True)
+              if is_even:
+                cell.fill = fill_even
+
+          ws.column_dimensions["A"].width = 35
+          ws.column_dimensions["B"].width = 55
+          final_output = BytesIO()
+          wb.save(final_output)
+          return final_output.getvalue()
+
+        excel_data = create_styled_vertical_excel(
+            columns_list, values_list, mod_title
+        )
         st.download_button(
             label="📊 Download Excel Detail",
-            data=create_excel(columns_list, values_list),
+            data=excel_data,
             file_name=f"Detail_Aset_{selected_row_idx+1}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
       with col_e2:
+        csv_data = detail_df.to_csv(index=False).encode("utf-8")
         st.download_button(
             label="📄 Download CSV Detail",
-            data=detail_df.to_csv(index=False).encode("utf-8"),
+            data=csv_data,
             file_name=f"Detail_Aset_{selected_row_idx+1}.csv",
             mime="text/csv",
         )
 
       with col_e3:
 
-        def create_pdf(cols, vals):
+        def create_pdf_detail(cols, vals, title_mod):
           pdf = FPDF(orientation="P", unit="mm", format="A4")
           pdf.add_page()
           pdf.set_font("Arial", "B", 12)
-          pdf.cell(0, 10, "KARTU INVENTARIS BARANG - DETAIL ASET", 0, 1, "C")
+          pdf.set_text_color(30, 60, 114)
+          pdf.cell(
+              0, 10, f"KARTU INVENTARIS BARANG ({title_mod}) - DETAIL ASET", 0, 1, "C"
+          )
           pdf.ln(3)
           pdf.set_font("Arial", "B", 9)
-          pdf.set_fill_color(44, 62, 80)
+          pdf.set_fill_color(30, 60, 114)
           pdf.set_text_color(255, 255, 255)
-          pdf.cell(75, 7, "Atribut / Kolom Database", 1, 0, "C", True)
+          pdf.cell(75, 7, f"Atribut / Kolom {title_mod}", 1, 0, "C", True)
           pdf.cell(115, 7, "Keterangan / Isi Data", 1, 1, "C", True)
           pdf.set_font("Arial", "", 8.5)
           pdf.set_text_color(0, 0, 0)
           fill = False
           for col, val in zip(cols, vals):
-            pdf.set_fill_color(241, 245, 249) if fill else pdf.set_fill_color(
-                255, 255, 255
-            )
+            if fill:
+              pdf.set_fill_color(241, 245, 249)
+            else:
+              pdf.set_fill_color(255, 255, 255)
             pdf.cell(75, 6, str(col or ""), 1, 0, "L", True)
             pdf.cell(115, 6, str(val or ""), 1, 1, "L", True)
             fill = not fill
           output_pdf = pdf.output(dest="S")
-          return (
-              bytes(output_pdf)
-              if isinstance(output_pdf, (bytes, bytearray))
-              else output_pdf.encode("latin1")
-          )
+          if isinstance(output_pdf, (bytes, bytearray)):
+            return bytes(output_pdf)
+          else:
+            return output_pdf.encode("latin1")
 
+        pdf_bytes = create_pdf_detail(columns_list, values_list, mod_title)
         st.download_button(
             label="📑 Download PDF Detail",
-            data=create_pdf(columns_list, values_list),
+            data=pdf_bytes,
             file_name=f"Detail_Aset_{selected_row_idx+1}.pdf",
             mime="application/pdf",
         )
