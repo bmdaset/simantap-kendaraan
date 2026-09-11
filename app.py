@@ -150,7 +150,8 @@ def load_kendaraan_data():
         seen[c] = 0
         unique_cols.append(c)
 
-    df = df_raw.iloc[data_start_idx : data_start_idx + 3000].copy()
+    # Menggunakan batas persis tanpa membaca baris kosong berlebih di bawah
+    df = df_raw.iloc[data_start_idx:].copy()
     df.columns = unique_cols[: df.shape[1]]
     if df.shape[1] > len(unique_cols):
       for i in range(len(unique_cols), df.shape[1]):
@@ -160,6 +161,9 @@ def load_kendaraan_data():
     valid_drop_indices = [i for i in drop_indices if i < len(df.columns)]
     df = df.drop(df.columns[valid_drop_indices], axis=1).reset_index(drop=True)
     df = df.dropna(how="all").reset_index(drop=True)
+
+    # Membuang baris kosong atau baris rekap bawah jika ada
+    df = df[df.iloc[:, 0].notna()].reset_index(drop=True)
 
     df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
     df["Harga_Clean"] = 0.0
@@ -279,7 +283,6 @@ def load_kiba_data():
       return pd.DataFrame()
 
   try:
-    # Membaca sheet khusus KIB A Tanah (sesuaikan nama sheet jika berbeda, misal "KIB A" atau "TANAH")
     xls = pd.ExcelFile(file_path)
     sheet_names = xls.sheet_names
     target_sheet = next(
@@ -294,10 +297,18 @@ def load_kiba_data():
     )
 
     df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
+
+    # Deteksi baris header KIB A secara persis seperti struktur Kendaraan Dinas (mendukung 2 baris header jika ada)
     header_row_idx = 0
     for idx, row in df_raw.head(20).iterrows():
       row_str = " ".join([str(val).lower() for val in row.values])
-      if "luas" in row_str or "alamat" in row_str or "letak" in row_str:
+      if (
+          "luas" in row_str
+          or "alamat" in row_str
+          or "letak" in row_str
+          or "hak" in row_str
+          or "barang" in row_str
+      ):
         header_row_idx = idx
         break
 
@@ -344,13 +355,14 @@ def load_kiba_data():
         seen[c] = 0
         unique_cols.append(c)
 
-    df = df_raw.iloc[data_start_idx : data_start_idx + 3000].copy()
+    df = df_raw.iloc[data_start_idx:].copy()
     df.columns = unique_cols[: df.shape[1]]
     if df.shape[1] > len(unique_cols):
       for i in range(len(unique_cols), df.shape[1]):
         df.rename(columns={df.columns[i]: f"Kolom_{i}"}, inplace=True)
 
     df = df.dropna(how="all").reset_index(drop=True)
+    df = df[df.iloc[:, 0].notna()].reset_index(drop=True)
 
     df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
     df["Harga_Clean"] = 0.0
@@ -505,11 +517,11 @@ elif st.session_state.page == "table":
     if pilih_skpd != "Semua SKPD":
       active_df = active_df[active_df["SKPD_Nama"] == pilih_skpd]
 
-  # Kolom pencarian khusus untuk KIB A Tanah memfokuskan pencarian pada Alamat dan Keterangan serta atribut lainnya
+  # Searching khusus untuk KIB A Tanah memfokuskan pencarian pada Alamat dan Keterangan
   if st.session_state.module == "tanah":
     search_query = st.text_input(
-        "🔍 Cari KIB A Tanah (Fokus Alamat, Keterangan, No. Sertifikat, Nama"
-        " Barang, dll)..."
+        "🔍 Cari KIB A Tanah (Berdasarkan Alamat, Keterangan, No. Sertifikat,"
+        " Nama Barang, dll)..."
     )
   else:
     search_query = st.text_input(
@@ -537,6 +549,16 @@ elif st.session_state.page == "table":
   ).reset_index(drop=True)
 
   st.dataframe(display_df, use_container_width=True, height=400)
+
+  st.markdown("---")
+  if st.session_state.module == "kendaraan":
+    st.markdown(f"#### 📊 Ringkasan Jumlah Kategori Kendaraan ({pilih_skpd})")
+    if not active_df.empty:
+      summary_kat = active_df["Kategori_Jenis"].value_counts().reset_index()
+      summary_kat.columns = ["Kategori Kendaraan", "Jumlah Unit"]
+      st.dataframe(summary_kat, use_container_width=True)
+    else:
+      st.info("Tidak ada data untuk kategori ini.")
 
   st.markdown("---")
   st.markdown("#### 🔍 Preview Kartu Detail Bergaris & Download")
