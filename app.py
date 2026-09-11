@@ -490,7 +490,6 @@ if "keyword" not in st.session_state:
 if "title" not in st.session_state:
   st.session_state.title = ""
 
-# Dinamik Background berdasarkan Modul yang Aktif (Tampilan Cerah & Elegan)
 if st.session_state.page == "table":
   if st.session_state.module == "kendaraan":
     st.markdown(
@@ -641,15 +640,19 @@ elif st.session_state.page == "table":
 
   st.markdown("---")
   if st.session_state.module == "kendaraan":
-    st.markdown(
-        "#### 📊 Rekapitulasi Keseluruhan Kategori Kendaraan per SKPD"
+    rekap_title = (
+        f"📊 Rekapitulasi Kategori Kendaraan: {pilih_skpd}"
+        if pilih_skpd != "Semua SKPD"
+        else "📊 Rekapitulasi Keseluruhan Kategori Kendaraan per SKPD"
     )
-    if not df_kendaraan.empty:
+    st.markdown(f"#### {rekap_title}")
+
+    if not active_df.empty:
       summary_pivot = (
-          df_kendaraan.pivot_table(
+          active_df.pivot_table(
               index="SKPD_Nama",
               columns="Kategori_Jenis",
-              values=df_kendaraan.columns[0],
+              values=active_df.columns[0],
               aggfunc="count",
               fill_value=0,
           )
