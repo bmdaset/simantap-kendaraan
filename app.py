@@ -66,7 +66,7 @@ def load_data():
       return pd.DataFrame(), None
 
   try:
-    # Deteksi baris header secara otomatis agar 100% sinkron langsung dari file Excel
+    # Membaca baris header secara fleksibel sesuai format KIB B di Excel
     df_raw = pd.read_excel(
         file_path, sheet_name="KENDARAAN DINAS", header=None
     )
@@ -81,9 +81,13 @@ def load_data():
         file_path, sheet_name="KENDARAAN DINAS", header=header_idx
     )
 
-    # Bersihkan nama kolom dari kolom kosong/unnamed
+    # Membersihkan nama kolom dari unnamed/kosong
     df = df.loc[:, ~df.columns.astype(str).str.contains("^Unnamed")]
     df.columns = [str(c).strip() for c in df.columns]
+
+    # Mengabaikan kolom ke-19 hingga ke-21 jika ada
+    if df.shape[1] > 18:
+      df = df.iloc[:, :18]
 
     df = df.dropna(how="all").reset_index(drop=True)
 
@@ -97,7 +101,7 @@ def load_data():
 
     df = df[df[first_col].apply(is_valid_row)].reset_index(drop=True)
 
-    # Pembersihan format desimal .0 pada seluruh sel data string
+    # Pembersihan format desimal .0 pada sel data string
     for col in df.columns:
       df[col] = (
           df[col]
@@ -230,7 +234,7 @@ st.markdown(
 if st.session_state.page == "menu":
   st.markdown(
       "<h4 style='text-align:center; color:#34495e; margin-bottom:25px;'>Silakan"
-      " Pilih Kategori Aset Kendaraan</h4>",
+      f" Pilih Kategori Aset Kendaraan (Total Database: {len(df):,} Unit</h4>",
       unsafe_allow_html=True,
   )
 
@@ -339,7 +343,8 @@ elif st.session_state.page == "table":
     filtered_df = filtered_df[mask_search]
 
   st.info(
-      f"Menampilkan {len(filtered_df)} baris data | Database:"
+      f"Menampilkan {len(filtered_df)} baris data (Total Keseluruhan"
+      f" Database: {len(df)} baris) | File:"
       f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
   )
 
