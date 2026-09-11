@@ -147,20 +147,17 @@ def load_data():
       final_cols = h1
       data_start_idx = header_row_idx + 1
 
-    # Ubah penamaan kolom sesuai permintaan
     transformed_cols = []
     for c in final_cols:
       c_lower = c.lower()
       if "pembelian" in c_lower:
         transformed_cols.append("Tahun Pembuatan")
       elif c_lower.startswith("tahun"):
-        # Ganti kata Tahun menjadi Nomor
         replaced = c.replace("Tahun", "Nomor").replace("tahun", "Nomor")
         transformed_cols.append(replaced)
       else:
         transformed_cols.append(c)
 
-    # Buat nama kolom unik agar tidak terjadi duplikasi index pandas
     seen = {}
     unique_cols = []
     for c in transformed_cols:
@@ -177,24 +174,21 @@ def load_data():
       for i in range(len(unique_cols), df.shape[1]):
         df.rename(columns={df.columns[i]: f"Kolom_{i}"}, inplace=True)
 
-    # Hapus kolom ke-14, 19, dan 20 (index 13, 18, 19 dalam zero-based index)
+    # Pembersihan kolom tambahan/bantu kode (indeks 13, 18, 19 dalam zero-based index)
     drop_indices = [13, 18, 19]
     valid_drop_indices = [i for i in drop_indices if i < len(df.columns)]
     df = df.drop(df.columns[valid_drop_indices], axis=1).reset_index(drop=True)
 
-    # Validasi baris berdasarkan kolom pertama (No. Urut)
     first_col = df.columns[0]
     df = df[
         pd.to_numeric(df[first_col], errors="coerce").fillna(0) > 0
     ].reset_index(drop=True)
 
-    # Kolom Default Pengaman untuk Mencegah KeyError
     df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
     df["Harga_Clean"] = 0.0
     df["Kategori_Jenis"] = "Lainnya"
 
     if not df.empty:
-      # Pencarian kolom SKPD / Dinas secara dinamis
       skpd_col = next(
           (
               c
@@ -215,7 +209,6 @@ def load_data():
             .str.strip()
         )
 
-      # Pencarian kolom Harga secara dinamis, dikali 1000
       harga_col = next(
           (
               c
@@ -237,7 +230,6 @@ def load_data():
             * 1000
         )
 
-      # Deteksi Kategori Kendaraan Otomatis
       def deteksi_kategori(row):
         combined = " ".join(
             [str(val) for val in row.values if pd.notna(val)]
