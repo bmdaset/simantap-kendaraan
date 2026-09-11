@@ -168,22 +168,20 @@ def load_data():
         seen[c] = 0
         unique_cols.append(c)
 
-    df = df_raw.iloc[data_start_idx:].copy()
+    # Membaca data hingga 3000 baris agar otomatis mendeteksi penambahan data baru
+    df = df_raw.iloc[data_start_idx : data_start_idx + 3000].copy()
     df.columns = unique_cols[: df.shape[1]]
     if df.shape[1] > len(unique_cols):
       for i in range(len(unique_cols), df.shape[1]):
         df.rename(columns={df.columns[i]: f"Kolom_{i}"}, inplace=True)
 
     # Buang kolom bantu yang tidak diperlukan (Asal Usul sub, SKPD_1, SKPD_2)
-    # Mempertahankan kolom SKPD utama (index 18) agar nama instansi tetap tampil
     drop_indices = [14, 19, 20]
     valid_drop_indices = [i for i in drop_indices if i < len(df.columns)]
     df = df.drop(df.columns[valid_drop_indices], axis=1).reset_index(drop=True)
 
-    first_col = df.columns[0]
-    df = df[
-        pd.to_numeric(df[first_col], errors="coerce").fillna(0) > 0
-    ].reset_index(drop=True)
+    # Bersihkan baris yang kosong total agar pembacaan sampai 3,000 baris aman
+    df = df.dropna(how="all").reset_index(drop=True)
 
     df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
     df["Harga_Clean"] = 0.0
@@ -210,7 +208,6 @@ def load_data():
             .str.upper()
             .str.strip()
         )
-        # Ganti isi kolom SKPD dengan nama yang sudah dibersihkan/ffill agar tampil sempurna
         df[skpd_col] = df["SKPD_Nama"]
 
       harga_col = next(
@@ -224,7 +221,6 @@ def load_data():
           None,
       )
       if harga_col:
-        # Hitung nilai bersih dikali 1000
         calculated_harga = (
             pd.to_numeric(
                 df[harga_col]
@@ -235,7 +231,6 @@ def load_data():
             * 1000
         )
         df["Harga_Clean"] = calculated_harga
-        # Timpa langsung kolom Harga agar tampil dikali 1000 di tabel
         df[harga_col] = calculated_harga
 
       def deteksi_kategori(row):
@@ -501,11 +496,27 @@ elif st.session_state.page == "table":
     if selected_row_idx is not None:
       row_data = display_df.loc[selected_row_idx]
       columns_list = list(display_df.columns)
-      values_list = [row_data[col] for col in columns_list]
+
+      # Pembersihan nilai desimal .000000 agar tampil bersih tanpa angka nol berlebih
+      cleaned_values = []
+      for col in columns_list:
+        val = row_data[col]
+        if pd.isna(val):
+          cleaned_values.append("None")
+        elif isinstance(val, (int, float)):
+          if "harga" in col.lower():
+            cleaned_values.append(f"{int(val):,}".replace(",", "."))
+          else:
+            if val == int(val):
+              cleaned_values.append(str(int(val)))
+            else:
+              cleaned_values.append(str(val))
+        else:
+          cleaned_values.append(str(val))
 
       detail_df = pd.DataFrame({
           "Atribut / Kolom Data": columns_list,
-          "Keterangan / Isi Data": values_list,
+          "Keterangan / Isi Data": cleaned_values,
       })
 
       styled_preview = (
@@ -600,7 +611,7 @@ elif st.session_state.page == "table":
           wb.save(final_output)
           return final_output.getvalue()
 
-        excel_data = create_styled_vertical_excel(columns_list, values_list)
+        excel_data = create_styled_vertical_excel(columns_list, cleaned_values)
         st.download_button(
             label="📊 Download Excel Bergaris",
             data=excel_data,
@@ -650,7 +661,7 @@ elif st.session_state.page == "table":
           else:
             return output_pdf.encode("latin1")
 
-        pdf_bytes = create_pdf_detail(columns_list, values_list)
+        pdf_bytes = create_pdf_detail(columns_list, cleaned_values)
         st.download_button(
             label="📑 Download PDF Bergaris",
             data=pdf_bytes,
