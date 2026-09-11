@@ -78,7 +78,7 @@ st.markdown(
 def load_kendaraan_data():
   file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
   if not os.path.exists(file_path):
-    all_excel = glob.glob(".xlsx") + glob.glob(".xls")
+    all_excel = glob.glob("*.xlsx") + glob.glob("*.xls")
     if all_excel:
       file_path = all_excel[0]
     else:
@@ -162,7 +162,6 @@ def load_kendaraan_data():
     df = df.dropna(how="all").reset_index(drop=True)
     df = df[df.iloc[:, 0].notna()].reset_index(drop=True)
 
-    # Filter buang baris total / jumlah di bagian bawah
     if not df.empty:
       first_col_name = df.columns[0]
       df = df[
@@ -283,7 +282,7 @@ def load_kendaraan_data():
 def load_kiba_data():
   file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
   if not os.path.exists(file_path):
-    all_excel = glob.glob(".xlsx") + glob.glob(".xls")
+    all_excel = glob.glob("*.xlsx") + glob.glob("*.xls")
     if all_excel:
       file_path = all_excel[0]
     else:
@@ -305,7 +304,6 @@ def load_kiba_data():
 
     df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
 
-    # Deteksi baris header KIB A secara akurat
     header_row_idx = 0
     for idx, row in df_raw.head(20).iterrows():
       row_str = " ".join([str(val).lower() for val in row.values])
@@ -333,7 +331,6 @@ def load_kiba_data():
           .str.strip()
           .tolist()
       )
-      # Cek apakah baris setelahnya masih bagian dari header (misal sub-kolom KIB)
       row_str_h2 = " ".join([str(v).lower() for v in h2])
       if (
           "m2" in row_str_h2
@@ -363,9 +360,34 @@ def load_kiba_data():
       final_cols = h1
       data_start_idx = header_row_idx + 1
 
+    cleaned_cols = []
+    for idx_col, c in enumerate(final_cols):
+      c_str = str(c).strip()
+
+      if idx_col == 9 or c_str.lower() == "letak/":
+        c_str = "Tanggal Sertifikat"
+      else:
+        if "alamat" not in c_str.lower():
+          c_str = (
+              c_str.replace("Letak/ - ", "")
+              .replace("Letak / - ", "")
+              .replace("Letak/", "")
+              .replace("letak/", "")
+              .strip()
+          )
+
+      if (
+          not c_str
+          or c_str.lower() == "none"
+          or c_str.startswith("Unnamed")
+      ):
+        c_str = f"Kolom_{idx_col}"
+
+      cleaned_cols.append(c_str)
+
     seen = {}
     unique_cols = []
-    for c in final_cols:
+    for c in cleaned_cols:
       if c in seen:
         seen[c] += 1
         unique_cols.append(f"{c}_{seen[c]}")
@@ -428,10 +450,15 @@ def load_kiba_data():
           None,
       )
       if harga_col:
-        calculated_harga = pd.to_numeric(
+        raw_harga = pd.to_numeric(
             df[harga_col].astype(str).str.replace(r"[^\d.]", "", regex=True),
             errors="coerce",
         ).fillna(0)
+        if raw_harga.mean() > 0 and raw_harga.mean() < 100000:
+          calculated_harga = raw_harga * 1000
+        else:
+          calculated_harga = raw_harga
+
         df["Harga_Clean"] = calculated_harga
         df[harga_col] = calculated_harga
 
