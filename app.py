@@ -16,19 +16,19 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Styling Latar Belakang & Header Utama BMD */
+    /* Global Background Tema BMD */
     .stApp {
-        background: linear-gradient(180deg, #f4f7f6 0%, #e9edf0 100%);
+        background: linear-gradient(135deg, #eef2f5 0%, #e2e8f0 100%);
     }
     .main-header {
-        background: linear-gradient(135deg, #1b365d 0%, #2c5282 100%);
+        background: linear-gradient(135deg, #1b365d 0%, #3182ce 100%);
         padding: 35px;
         border-radius: 14px;
         color: white;
         text-align: center;
         margin-bottom: 30px;
-        box-shadow: 0 6px 20px rgba(27,54,93,0.25);
-        border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 8px 25px rgba(27,54,93,0.3);
+        border: 1px solid rgba(255,255,255,0.2);
     }
     .main-header h2 {
         margin: 0;
@@ -40,27 +40,27 @@ st.markdown(
     .main-header p {
         margin: 10px 0 0 0;
         font-size: 15px;
-        color: #e2e8f0;
+        color: #edf2f7;
     }
-    /* Kartu Menu Kendaraan */
+    /* Kartu Menu Kendaraan - Nuansa Cerah & Elegan */
     .card-menu-kendaraan {
-        background: linear-gradient(135deg, #2b4c7e 0%, #1a365d 100%);
+        background: linear-gradient(135deg, #2b6cb0 0%, #4299e1 100%);
         padding: 28px;
         border-radius: 14px;
         color: white;
-        box-shadow: 0 8px 20px rgba(43,76,126,0.3);
+        box-shadow: 0 10px 25px rgba(43,108,176,0.35);
         margin-bottom: 15px;
-        border-left: 6px solid #63b3ed;
+        border-left: 6px solid #bee3f8;
     }
-    /* Kartu Menu KIB A Tanah */
+    /* Kartu Menu KIB A Tanah - Nuansa Hijau Tanah Cerah & Elegan */
     .card-menu-tanah {
-        background: linear-gradient(135deg, #134e5e 0%, #285e61 100%);
+        background: linear-gradient(135deg, #276749 0%, #38a169 100%);
         padding: 28px;
         border-radius: 14px;
         color: white;
-        box-shadow: 0 8px 20px rgba(19,78,94,0.3);
+        box-shadow: 0 10px 25px rgba(39,103,73,0.35);
         margin-bottom: 15px;
-        border-left: 6px solid #68d391;
+        border-left: 6px solid #c6f6d5;
     }
     .stButton>button {
         width: 100%;
@@ -72,11 +72,11 @@ st.markdown(
         border: none;
         background-color: #ffffff;
         color: #1a365d;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.08);
     }
     .stButton>button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+        box-shadow: 0 6px 15px rgba(0,0,0,0.18);
         background-color: #f7fafc;
         color: #2b6cb0;
     }
@@ -101,7 +101,7 @@ def load_kendaraan_data():
         file_path, sheet_name="KENDARAAN DINAS", header=None
     )
     header_row_idx = 13
-    for idx, row in df_raw.head(20).iterrows():
+    for idx, row in df_raw.head(25).iterrows():
       row_str = " ".join([str(val).lower() for val in row.values])
       if "jenis barang" in row_str or "merk" in row_str:
         header_row_idx = idx
@@ -317,7 +317,7 @@ def load_kiba_data():
     df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
 
     header_row_idx = 0
-    for idx, row in df_raw.head(20).iterrows():
+    for idx, row in df_raw.head(25).iterrows():
       row_str = " ".join([str(val).lower() for val in row.values])
       if (
           "luas" in row_str
@@ -493,6 +493,31 @@ if "keyword" not in st.session_state:
 if "title" not in st.session_state:
   st.session_state.title = ""
 
+# Dinamik Background berdasarkan Modul yang Aktif (Tampilan Cerah & Elegan)
+if st.session_state.page == "table":
+  if st.session_state.module == "kendaraan":
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+  else:
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 st.markdown(
     """
     <div class="main-header">
@@ -517,7 +542,7 @@ if st.session_state.page == "menu":
         f"""
         <div class="card-menu-kendaraan">
             <h3 style="margin-top:0; color:#fff;">🚗 Kendaraan Dinas</h3>
-            <p style="color:#e2e8f0; font-size:14px;"><b>Total Unit Terdata:</b> {len(df_kendaraan):,} Data<br>Kelola data mobil, motor, & pick-up dinas.</p>
+            <p style="color:#f7fafc; font-size:14px;"><b>Total Unit Terdata:</b> {len(df_kendaraan):,} Data<br>Kelola data mobil, motor, & pick-up dinas.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -534,7 +559,7 @@ if st.session_state.page == "menu":
         f"""
         <div class="card-menu-tanah">
             <h3 style="margin-top:0; color:#fff;">🌍 KIB A - Tanah</h3>
-            <p style="color:#e2e8f0; font-size:14px;"><b>Total Bidang Terdata:</b> {len(df_tanah):,} Data<br>Kelola data aset tanah dan alamat lokasi.</p>
+            <p style="color:#f7fafc; font-size:14px;"><b>Total Bidang Terdata:</b> {len(df_tanah):,} Data<br>Kelola data aset tanah dan alamat lokasi.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -558,10 +583,11 @@ elif st.session_state.page == "table":
       st.rerun()
 
   module_accent = (
-      "#1a365d" if st.session_state.module == "kendaraan" else "#134e5e"
+      "#2b6cb0" if st.session_state.module == "kendaraan" else "#276749"
   )
   st.markdown(
-      f"<h3 style='color:{module_accent};'>📂 {st.session_state.title}</h3>",
+      f"<h3 style='color:{module_accent}; font-weight:700;'>📂"
+      f" {st.session_state.title}</h3>",
       unsafe_allow_html=True,
   )
 
@@ -606,7 +632,7 @@ elif st.session_state.page == "table":
     )
     active_df = active_df[mask_search]
 
-  st.info(f"Menampilkan {len(active_df)} baris data aset")
+  st.info(f"Menampilkan {len(active_df):,} baris data aset")
 
   columns_to_drop = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"]
   display_df = active_df.drop(
@@ -614,7 +640,7 @@ elif st.session_state.page == "table":
       errors="ignore",
   ).reset_index(drop=True)
 
-  st.dataframe(display_df, use_container_width=True, height=400)
+  st.dataframe(display_df, use_container_width=True, height=450)
 
   st.markdown("---")
   if st.session_state.module == "kendaraan":
@@ -680,7 +706,7 @@ elif st.session_state.page == "table":
       })
 
       table_bg_color = (
-          "1a365d" if st.session_state.module == "kendaraan" else "134e5e"
+          "2b6cb0" if st.session_state.module == "kendaraan" else "276749"
       )
       styled_preview = (
           detail_df.style.set_table_styles([
@@ -707,7 +733,7 @@ elif st.session_state.page == "table":
       )
 
       st.markdown(
-          "<p style='font-weight:600; color:#1a365d;'>Preview Tabel Bergaris:</p>",
+          "<p style='font-weight:600; color:#2d3748;'>Preview Tabel Bergaris:</p>",
           unsafe_allow_html=True,
       )
       st.dataframe(styled_preview, use_container_width=True, height=450)
@@ -791,16 +817,16 @@ elif st.session_state.page == "table":
           pdf.add_page()
           pdf.set_font("Arial", "B", 14)
           if module_type == "kendaraan":
-            pdf.set_text_color(26, 54, 93)
+            pdf.set_text_color(43, 108, 176)
           else:
-            pdf.set_text_color(19, 78, 94)
+            pdf.set_text_color(39, 103, 73)
           pdf.cell(0, 10, "DETAIL INFORMASI ASET PEMERINTAH DAERAH", 0, 1, "C")
           pdf.ln(4)
           pdf.set_font("Arial", "B", 10)
           if module_type == "kendaraan":
-            pdf.set_fill_color(26, 54, 93)
+            pdf.set_fill_color(43, 108, 176)
           else:
-            pdf.set_fill_color(19, 78, 94)
+            pdf.set_fill_color(39, 103, 73)
           pdf.set_text_color(255, 255, 255)
           pdf.cell(70, 7, "Atribut / Kolom Data", 1, 0, "C", True)
           pdf.cell(120, 7, "Keterangan / Isi Data", 1, 1, "C", True)
