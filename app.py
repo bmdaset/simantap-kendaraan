@@ -37,7 +37,6 @@ st.markdown(
         opacity: 0.85;
     }
     
-    /* Styling Kartu Menu dengan Gradasi Warna Elegan */
     .card-semua {
         background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
         padding: 24px;
@@ -101,34 +100,30 @@ def load_data():
     if all_excel:
       file_path = all_excel[0]
     else:
-      return pd.DataFrame(), None
+      return pd.DataFrame()
 
   try:
-    # Membaca seluruh sheet tanpa header fix untuk mendeteksi baris data secara dinamis
     df_raw = pd.read_excel(
         file_path, sheet_name="KENDARAAN DINAS", header=None
     )
 
-    # Mencari baris header secara otomatis (mencari baris yang mengandung 'no' atau 'kode')
-    header_row_idx = 14  # Default posisi baris header KIB B standard
+    # Deteksi baris header secara akurat berdasarkan kata kunci di dalam file Excel KIB B
+    header_row_idx = 13
     for idx, row in df_raw.head(20).iterrows():
       row_str = " ".join([str(val).lower() for val in row.values])
-      if "no." in row_str or "kode" in row_str or "jenis barang" in row_str:
+      if "jenis barang" in row_str or "merk" in row_str:
         header_row_idx = idx
         break
 
-    # Menggabungkan multi-header jika diperlukan atau ambil baris header langsung
-    raw_columns = (
+    h1 = (
         df_raw.iloc[header_row_idx]
         .fillna("")
         .astype(str)
         .str.strip()
         .tolist()
     )
-
-    # Jika ada sub-header di bawahnya (misal baris header_row_idx + 1), kita kombinasikan agar lengkap
     if header_row_idx + 1 < len(df_raw):
-      sub_columns = (
+      h2 = (
           df_raw.iloc[header_row_idx + 1]
           .fillna("")
           .astype(str)
@@ -137,7 +132,7 @@ def load_data():
       )
       combined_cols = []
       last_main = ""
-      for m, s in zip(raw_columns, sub_columns):
+      for m, s in zip(h1, h2):
         if m != "" and not m.startswith("Unnamed"):
           last_main = m
         if s != "" and not s.startswith("Unnamed"):
@@ -150,143 +145,139 @@ def load_data():
       final_cols = combined_cols
       data_start_idx = header_row_idx + 2
     else:
-      final_cols = raw_columns
+      final_cols = h1
       data_start_idx = header_row_idx + 1
 
-    df = df_raw.iloc[data_start_idx:].copy()
+    # Buat nama kolom unik agar tidak error duplikasi di pandas
+    seen = {}
+    unique_cols = []
+    for c in final_cols:
+      if c in seen:
+        seen[c] += 1
+        unique_cols.append(f"{c}_{seen[c]}")
+      else:
+        seen[c] = 0
+        unique_cols.append(c)
 
-    # Pastikan jumlah kolom pas
-    if len(final_cols) >= df.shape[1]:
-      df.columns = final_cols[: df.shape[1]]
-    else:
-      extra = [f"Kolom_{i}" for i in range(len(final_cols), df.shape[1])]
-      df.columns = final_cols + extra
+    df = df_raw.iloc[data_start_idx:].copy()
+    df.columns = unique_cols[: df.shape[1]]
+    if df.shape[1] > len(unique_cols):
+      for i in range(len(unique_cols), df.shape[1]):
+        df.rename(columns={df.columns[i]: f"Kolom_{i}"}, inplace=True)
 
     df = df.reset_index(drop=True)
 
-    # Validasi baris aktif berdasarkan kolom pertama (No. Urut / Angka)
+    # Validasi baris berdasarkan kolom pertama (No. Urut)
     first_col = df.columns[0]
+    df = df[
+        pd.to_numeric(df[first_col], errors="coerce").fillna(0) > 0
+    ].reset_index(drop=True)
 
-    def is_valid_row(val):
-      try:
-        return int(float(val)) > 0
-      except:
-        return False
+    # Kolom Default Pengaman untuk Mencegah KeyError
+    df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
+    df["Harga_Clean"] = 0.0
+    df["Kategori_Jenis"] = "Lainnya"
 
-    df = df[df[first_col].apply(is_valid_row)].reset_index(drop=True)
-    df[first_col] = range(1, len(df) + 1)
-
-    # Pembersihan string & spasi ekstra di seluruh dataframe
-    for col in df.columns:
-      df[col] = (
-          df[col]
-          .astype(str)
-          .str.replace(r"\.0+$", "", regex=True)
-          .replace("nan", "")
-          .replace("None", "")
-          .str.strip()
+    if not df.empty:
+      # Pencarian kolom SKPD / Dinas secara dinamis
+      skpd_col = next(
+          (
+              c
+              for c in df.columns
+              if "skpd" in c.lower()
+              or "dinas" in c.lower()
+              or "unit" in c.lower()
+          ),
+          None,
       )
+      if skpd_col:
+        df["SKPD_Nama"] = (
+            df[skpd_col]
+            .ffill()
+            .fillna("DINAS / INSTANSI LAINNYA")
+            .astype(str)
+            .str.upper()
+            .str.strip()
+        )
 
-    # Pencarian kolom SKPD / Dinas secara dinamis
-    skpd_col = next(
-        (
-            c
-            for c in df.columns
-            if "skpd" in c.lower()
-            or "dinas" in c.lower()
-            or "unit" in c.lower()
-        ),
-        None,
-    )
-    if skpd_col:
-      df["SKPD_Nama"] = (
-          df[skpd_col]
-          .ffill()
-          .fillna("DINAS / INSTANSI LAINNYA")
-          .astype(str)
-          .str.upper()
-          .str.strip()
+      # Pencarian kolom Harga secara dinamis
+      harga_col = next(
+          (
+              c
+              for c in df.columns
+              if "harga" in c.lower()
+              or "rupiah" in c.lower()
+              or "nilai" in c.lower()
+          ),
+          None,
       )
-    else:
-      df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
+      if harga_col:
+        df["Harga_Clean"] = pd.to_numeric(
+            df[harga_col]
+            .astype(str)
+            .str.replace(r"[^\d.]", "", regex=True),
+            errors="coerce",
+        ).fillna(0)
 
-    # Pencarian kolom Harga / Nilai Aset secara dinamis
-    harga_col = next(
-        (
-            c
-            for c in df.columns
-            if "harga" in c.lower()
-            or "rupiah" in c.lower()
-            or "nilai" in c.lower()
-        ),
-        None,
-    )
-    if harga_col:
-      df["Harga_Clean"] = pd.to_numeric(
-          df[harga_col].str.replace(r"[^\d.]", "", regex=True), errors="coerce"
-      ).fillna(0)
-    else:
-      df["Harga_Clean"] = 0
+      # Deteksi Kategori Kendaraan Otomatis
+      def deteksi_kategori(row):
+        combined = " ".join(
+            [str(val) for val in row.values if pd.notna(val)]
+        ).lower()
+        if any(k in combined for k in ["pick up", "pickup", "bak terbuka"]):
+          return "Pick Up"
+        elif any(
+            k in combined
+            for k in [
+                "station wagon",
+                "minibus",
+                "mini bus",
+                "mobil",
+                "jeep",
+                "sedan",
+                "bus",
+                "truk",
+                "truck",
+                "doka",
+                "double cabin",
+                "suv",
+                "mpv",
+                "pemadam",
+                "ambulance",
+                "dump truck",
+            ]
+        ):
+          return "Mobil"
+        elif any(
+            k in combined
+            for k in [
+                "sepeda motor",
+                "roda dua",
+                "trail",
+                "matic",
+                "klx",
+                "crf",
+                "bebek",
+                "scoopy",
+                "beat",
+                "vario",
+                "mio",
+                "motor",
+            ]
+        ):
+          return "Sepeda Motor"
+        else:
+          return "Lainnya"
 
-    # Deteksi Kategori Kendaraan Otomatis
-    def deteksi_kategori(row):
-      combined = " ".join(
-          [str(val) for val in row.values if pd.notna(val)]
-      ).lower()
-      if any(k in combined for k in ["pick up", "pickup", "bak terbuka"]):
-        return "Pick Up"
-      elif any(
-          k in combined
-          for k in [
-              "station wagon",
-              "minibus",
-              "mini bus",
-              "mobil",
-              "jeep",
-              "sedan",
-              "bus",
-              "truk",
-              "truck",
-              "doka",
-              "double cabin",
-              "suv",
-              "mpv",
-              "pemadam",
-              "ambulance",
-              "dump truck",
-          ]
-      ):
-        return "Mobil"
-      elif any(
-          k in combined
-          for k in [
-              "sepeda motor",
-              "roda dua",
-              "trail",
-              "matic",
-              "klx",
-              "crf",
-              "bebek",
-              "scoopy",
-              "beat",
-              "vario",
-              "mio",
-              "motor",
-          ]
-      ):
-        return "Sepeda Motor"
-      else:
-        return "Lainnya"
+      df["Kategori_Jenis"] = df.apply(deteksi_kategori, axis=1)
 
-    df["Kategori_Jenis"] = df.apply(deteksi_kategori, axis=1)
-
-    return df, file_path
+    return df
   except Exception as e:
-    print("Error:", e)
-    return pd.DataFrame(), None
+    print("Error Load Data:", e)
+    return pd.DataFrame()
 
 
-df, file_path = load_data()
+df = load_data()
 
 
 def format_rupiah(nilai):
@@ -446,11 +437,7 @@ elif st.session_state.page == "table":
     )
     filtered_df = filtered_df[mask_search]
 
-  st.info(
-      f"Menampilkan {len(filtered_df)} baris data (Total Keseluruhan"
-      f" Database: {len(df)} baris) | File:"
-      f" {os.path.basename(file_path) if file_path else 'Tidak ada'}"
-  )
+  st.info(f"Menampilkan {len(filtered_df)} baris data (Total Database: {len(df)})")
 
   columns_to_drop = [
       "Harga_Clean",
@@ -465,9 +452,7 @@ elif st.session_state.page == "table":
   st.dataframe(display_df, use_container_width=True, height=400)
 
   st.markdown("---")
-  st.markdown(
-      f"#### 📊 Ringkasan Jumlah Kategori Kendaraan ({pilih_skpd})"
-  )
+  st.markdown(f"#### 📊 Ringkasan Jumlah Kategori Kendaraan ({pilih_skpd})")
   if not filtered_df.empty:
     summary_kat = (
         filtered_df["Kategori_Jenis"].value_counts().reset_index()
@@ -480,7 +465,6 @@ elif st.session_state.page == "table":
   st.markdown("---")
   st.markdown("#### 🔍 Preview Kartu Detail Bergaris & Download")
   if not display_df.empty:
-    # Cari kolom nomor polisi untuk label dropdown jika ada
     nopol_col = next(
         (c for c in display_df.columns if "polisi" in c.lower()),
         display_df.columns[1] if len(display_df.columns) > 1 else display_df.columns[0],
@@ -531,8 +515,7 @@ elif st.session_state.page == "table":
       )
 
       st.markdown(
-          "<p style='font-weight:600; color:#1e3c72;'>Preview Tabel"
-          " Bergaris:</p>",
+          "<p style='font-weight:600; color:#1e3c72;'>Preview Tabel Bergaris:</p>",
           unsafe_allow_html=True,
       )
       st.dataframe(styled_preview, use_container_width=True, height=450)
@@ -621,38 +604,28 @@ elif st.session_state.page == "table":
         def create_pdf_detail(cols, vals):
           pdf = FPDF(orientation="P", unit="mm", format="A4")
           pdf.add_page()
-
           pdf.set_font("Arial", "B", 14)
           pdf.set_text_color(30, 60, 114)
           pdf.cell(
               0, 10, "DETAIL INFORMASI ASET KENDARAAN DINAS", 0, 1, "C"
           )
           pdf.ln(4)
-
           pdf.set_font("Arial", "B", 10)
           pdf.set_fill_color(30, 60, 114)
           pdf.set_text_color(255, 255, 255)
-
           pdf.cell(70, 7, "Atribut / Kolom Data", 1, 0, "C", True)
           pdf.cell(120, 7, "Keterangan / Isi Data", 1, 1, "C", True)
-
           pdf.set_font("Arial", "", 9)
           pdf.set_text_color(0, 0, 0)
-
           fill = False
           for col, val in zip(cols, vals):
             if fill:
-              pdf.set_workflow_fill = pdf.set_fill_color(240, 244, 248)
+              pdf.set_fill_color(240, 244, 248)
             else:
               pdf.set_fill_color(255, 255, 255)
-
-            col_str = str(col or "")
-            val_str = str(val or "")
-
-            pdf.cell(70, 6, col_str, 1, 0, "L", True)
-            pdf.cell(120, 6, val_str, 1, 1, "L", True)
+            pdf.cell(70, 6, str(col or ""), 1, 0, "L", True)
+            pdf.cell(120, 6, str(val or ""), 1, 1, "L", True)
             fill = not fill
-
           output_pdf = pdf.output(dest="S")
           if isinstance(output_pdf, (bytes, bytearray)):
             return bytes(output_pdf)
@@ -660,7 +633,6 @@ elif st.session_state.page == "table":
             return output_pdf.encode("latin1")
 
         pdf_bytes = create_pdf_detail(columns_list, values_list)
-
         st.download_button(
             label="📑 Download PDF Bergaris",
             data=pdf_bytes,
