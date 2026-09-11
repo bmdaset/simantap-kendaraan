@@ -36,18 +36,56 @@ st.markdown(
         font-size: 15px;
         opacity: 0.85;
     }
+    
+    /* Styling Kartu Menu dengan Gradasi Warna Elegan */
+    .card-semua {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        padding: 24px;
+        border-radius: 12px;
+        color: white;
+        box-shadow: 0 4px 12px rgba(30,60,114,0.25);
+        margin-bottom: 15px;
+    }
+    .card-mobil {
+        background: linear-gradient(135deg, #0f2027 0%, #203a43 100%, #2c5364 100%);
+        padding: 24px;
+        border-radius: 12px;
+        color: white;
+        box-shadow: 0 4px 12px rgba(32,58,67,0.25);
+        margin-bottom: 15px;
+    }
+    .card-motor {
+        background: linear-gradient(135deg, #134e5e 0%, #71b280 100%);
+        padding: 24px;
+        border-radius: 12px;
+        color: white;
+        box-shadow: 0 4px 12px rgba(19,78,94,0.25);
+        margin-bottom: 15px;
+    }
+    .card-pickup {
+        background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+        padding: 24px;
+        border-radius: 12px;
+        color: white;
+        box-shadow: 0 4px 12px rgba(131,58,180,0.25);
+        margin-bottom: 15px;
+    }
+    
     .stButton>button {
         width: 100%;
         border-radius: 8px;
         font-weight: 600;
-        padding: 14px;
+        padding: 12px;
         font-size: 15px;
         transition: all 0.3s ease;
         border: none;
+        background-color: white;
+        color: #1e3c72;
     }
     .stButton>button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        background-color: #f8f9fa;
     }
     </style>
 """,
@@ -70,7 +108,6 @@ def load_data():
         file_path, sheet_name="KENDARAAN DINAS", header=None
     )
 
-    # Definisi kolom KIB B secara akurat dan lengkap
     columns_kib_b = [
         "No. Urut",
         "Kode Barang",
@@ -93,7 +130,6 @@ def load_data():
         "SKPD",
     ]
 
-    # Data aktual dimulai dari baris ke-16 (index 15)
     df = df_raw.iloc[15:].copy()
 
     if df.shape[1] <= len(columns_kib_b):
@@ -106,7 +142,6 @@ def load_data():
 
     df = df.reset_index(drop=True)
 
-    # Validasi baris berdasarkan No. Urut angka valid > 0
     def is_valid_row(val):
       try:
         return int(float(val)) > 0
@@ -117,7 +152,6 @@ def load_data():
       df = df[df["No. Urut"].apply(is_valid_row)].reset_index(drop=True)
       df["No. Urut"] = range(1, len(df) + 1)
 
-    # Pembersihan string & spasi ekstra di seluruh dataframe
     for col in df.columns:
       df[col] = (
           df[col]
@@ -128,7 +162,6 @@ def load_data():
           .str.strip()
       )
 
-    # Penanganan SKPD
     skpd_col = next(
         (c for c in df.columns if "skpd" in c.lower() or "dinas" in c.lower()),
         None,
@@ -145,7 +178,6 @@ def load_data():
     else:
       df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
 
-    # Pembersihan nilai Harga
     harga_col = next(
         (c for c in df.columns if "harga" in c.lower() or "rupiah" in c.lower()),
         None,
@@ -157,7 +189,6 @@ def load_data():
     else:
       df["Harga_Clean"] = 0
 
-    # Deteksi Kategori Kendaraan
     def deteksi_kategori(row):
       combined = " ".join(
           [str(val) for val in row.values if pd.notna(val)]
@@ -266,56 +297,68 @@ if st.session_state.page == "menu":
   col1, col2 = st.columns(2, gap="medium")
 
   with col1:
-    with st.container(border=True):
-      st.markdown("### 📦 Semua Kendaraan")
-      st.write(
-          f"Total Unit: {t_semua:,} Data\n\nTotal Nilai Aset:"
-          f" {p_semua}"
-      )
-      if st.button("Kelola Semua Kendaraan", key="btn_semua"):
-        st.session_state.keyword = ""
-        st.session_state.title = "Semua Kendaraan Dinas"
-        st.session_state.page = "table"
-        st.rerun()
+    st.markdown(
+        f"""
+        <div class="card-semua">
+            <h3>📦 Semua Kendaraan</h3>
+            <p><b>Total Unit:</b> {t_semua:,} Data<br><b>Total Nilai Aset:</b> {p_semua}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Kelola Semua Kendaraan", key="btn_semua"):
+      st.session_state.keyword = ""
+      st.session_state.title = "Semua Kendaraan Dinas"
+      st.session_state.page = "table"
+      st.rerun()
 
     st.write("")
-    with st.container(border=True):
-      st.markdown("### 🚗 Mobil")
-      st.write(
-          f"Total Unit: {t_mobil:,} Data\n\nTotal Nilai Aset:"
-          f" {p_mobil}"
-      )
-      if st.button("Kelola Data Mobil", key="btn_mobil"):
-        st.session_state.keyword = "Mobil"
-        st.session_state.title = "Mobil"
-        st.session_state.page = "table"
-        st.rerun()
+    st.markdown(
+        f"""
+        <div class="card-mobil">
+            <h3>🚗 Mobil</h3>
+            <p><b>Total Unit:</b> {t_mobil:,} Data<br><b>Total Nilai Aset:</b> {p_mobil}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Kelola Data Mobil", key="btn_mobil"):
+      st.session_state.keyword = "Mobil"
+      st.session_state.title = "Mobil"
+      st.session_state.page = "table"
+      st.rerun()
 
   with col2:
-    with st.container(border=True):
-      st.markdown("### 🏍️ Sepeda Motor")
-      st.write(
-          f"Total Unit: {t_motor:,} Data\n\nTotal Nilai Aset:"
-          f" {p_motor}"
-      )
-      if st.button("Kelola Sepeda Motor", key="btn_motor"):
-        st.session_state.keyword = "Sepeda Motor"
-        st.session_state.title = "Sepeda Motor"
-        st.session_state.page = "table"
-        st.rerun()
+    st.markdown(
+        f"""
+        <div class="card-motor">
+            <h3>🏍️ Sepeda Motor</h3>
+            <p><b>Total Unit:</b> {t_motor:,} Data<br><b>Total Nilai Aset:</b> {p_motor}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Kelola Sepeda Motor", key="btn_motor"):
+      st.session_state.keyword = "Sepeda Motor"
+      st.session_state.title = "Sepeda Motor"
+      st.session_state.page = "table"
+      st.rerun()
 
     st.write("")
-    with st.container(border=True):
-      st.markdown("### 🚙 Pick Up")
-      st.write(
-          f"Total Unit: {t_pickup:,} Data\n\nTotal Nilai Aset:"
-          f" {p_pickup}"
-      )
-      if st.button("Kelola Pick Up", key="btn_pickup"):
-        st.session_state.keyword = "Pick Up"
-        st.session_state.title = "Pick Up"
-        st.session_state.page = "table"
-        st.rerun()
+    st.markdown(
+        f"""
+        <div class="card-pickup">
+            <h3>🚙 Pick Up</h3>
+            <p><b>Total Unit:</b> {t_pickup:,} Data<br><b>Total Nilai Aset:</b> {p_pickup}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Kelola Pick Up", key="btn_pickup"):
+      st.session_state.keyword = "Pick Up"
+      st.session_state.title = "Pick Up"
+      st.session_state.page = "table"
+      st.rerun()
 
 elif st.session_state.page == "table":
   col_back, col_ref, col_title = st.columns([1.5, 1.5, 5])
