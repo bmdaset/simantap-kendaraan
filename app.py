@@ -174,8 +174,9 @@ def load_data():
       for i in range(len(unique_cols), df.shape[1]):
         df.rename(columns={df.columns[i]: f"Kolom_{i}"}, inplace=True)
 
-    # Pembersihan kolom tambahan/bantu kode (indeks 13, 18, 19 dalam zero-based index)
-    drop_indices = [13, 18, 19]
+    # Buang kolom bantu yang tidak diperlukan (Asal Usul sub, SKPD_1, SKPD_2)
+    # Mempertahankan kolom SKPD utama (index 18) agar nama instansi tetap tampil
+    drop_indices = [14, 19, 20]
     valid_drop_indices = [i for i in drop_indices if i < len(df.columns)]
     df = df.drop(df.columns[valid_drop_indices], axis=1).reset_index(drop=True)
 
@@ -193,7 +194,8 @@ def load_data():
           (
               c
               for c in df.columns
-              if "skpd" in c.lower()
+              if c == "SKPD"
+              or "skpd" in c.lower()
               or "dinas" in c.lower()
               or "unit" in c.lower()
           ),
@@ -208,6 +210,8 @@ def load_data():
             .str.upper()
             .str.strip()
         )
+        # Ganti isi kolom SKPD dengan nama yang sudah dibersihkan/ffill agar tampil sempurna
+        df[skpd_col] = df["SKPD_Nama"]
 
       harga_col = next(
           (
@@ -220,7 +224,8 @@ def load_data():
           None,
       )
       if harga_col:
-        df["Harga_Clean"] = (
+        # Hitung nilai bersih dikali 1000
+        calculated_harga = (
             pd.to_numeric(
                 df[harga_col]
                 .astype(str)
@@ -229,6 +234,9 @@ def load_data():
             ).fillna(0)
             * 1000
         )
+        df["Harga_Clean"] = calculated_harga
+        # Timpa langsung kolom Harga agar tampil dikali 1000 di tabel
+        df[harga_col] = calculated_harga
 
       def deteksi_kategori(row):
         combined = " ".join(
