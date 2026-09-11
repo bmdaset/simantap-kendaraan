@@ -204,23 +204,43 @@ def load_all_data():
   except Exception as e:
     print("Error KENDARAAN:", e)
 
-  # 2. Load KIB A (KIB A TANAH)
+  # 2. Load KIB A (KIB A TANAH) - Robust Header & Column Detection
   df_tanah = pd.DataFrame()
   try:
     df_raw_t = pd.read_excel(file_path, sheet_name="KIB A TANAH", header=None)
     h_idx_t = 0
     for idx, row in df_raw_t.head(20).iterrows():
       txt = " ".join(str(v) for v in row.values).lower()
-      if "kode barang" in txt or "luas" in txt or "letak" in txt:
+      if "luas" in txt or "letak" in txt or "hak" in txt:
         h_idx_t = idx
         break
-    df_t = pd.read_excel(file_path, sheet_name="KIB A TANAH", header=h_idx_t)
+
+    df_t = pd.read_excel(
+        file_path, sheet_name="KIB A TANAH", header=[h_idx_t, h_idx_t + 1]
+    )
+    # Flatten MultiIndex columns if any
+    df_t.columns = [
+        " ".join([str(c) for c in col if "unnamed" not in str(c).lower()]).strip()
+        for col in df_t.columns
+    ]
+    # Fallback if flat columns are empty/messy, load with single header
+    if len(df_t.columns) == 0 or all(c == "" for c in df_t.columns):
+      df_t = pd.read_excel(
+          file_path, sheet_name="KIB A TANAH", header=h_idx_t + 1
+      )
+
     df_t = df_t.loc[:, ~df_t.columns.astype(str).str.contains("^Unnamed")]
     df_t.columns = [str(c).strip() for c in df_t.columns]
     df_t = df_t.dropna(how="all").reset_index(drop=True)
 
     first_col_t = df_t.columns[0]
-    df_t = df_t[df_t[first_col_t].apply(is_valid_row)].reset_index(drop=True)
+    df_t = df_t[
+        df_t[first_col_t].apply(
+            lambda x: str(x).strip().replace(".0", "").isdigit()
+            if pd.notna(x)
+            else False
+        )
+    ].reset_index(drop=True)
 
     rename_t = {}
     for col in df_t.columns:
@@ -232,6 +252,7 @@ def load_all_data():
       elif cl in ["nomor", "no. register", "register"]:
         rename_t[col] = "Nomor Register"
     df_t = df_t.rename(columns=rename_t)
+
     if "No. Urut" in df_t.columns:
       df_t["No. Urut"] = range(1, len(df_t) + 1)
 
