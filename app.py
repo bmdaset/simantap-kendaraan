@@ -16,41 +16,51 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Styling Latar Belakang & Header Utama BMD */
+    .stApp {
+        background: linear-gradient(180deg, #f4f7f6 0%, #e9edf0 100%);
+    }
     .main-header {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        padding: 30px;
-        border-radius: 12px;
+        background: linear-gradient(135deg, #1b365d 0%, #2c5282 100%);
+        padding: 35px;
+        border-radius: 14px;
         color: white;
         text-align: center;
         margin-bottom: 30px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        box-shadow: 0 6px 20px rgba(27,54,93,0.25);
+        border: 1px solid rgba(255,255,255,0.1);
     }
     .main-header h2 {
         margin: 0;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         font-weight: 700;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.8px;
+        color: #ffffff;
     }
     .main-header p {
-        margin: 8px 0 0 0;
+        margin: 10px 0 0 0;
         font-size: 15px;
-        opacity: 0.85;
+        color: #e2e8f0;
     }
-    .card-menu {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        padding: 24px;
-        border-radius: 12px;
+    /* Kartu Menu Kendaraan */
+    .card-menu-kendaraan {
+        background: linear-gradient(135deg, #2b4c7e 0%, #1a365d 100%);
+        padding: 28px;
+        border-radius: 14px;
         color: white;
-        box-shadow: 0 4px 12px rgba(30,60,114,0.25);
+        box-shadow: 0 8px 20px rgba(43,76,126,0.3);
         margin-bottom: 15px;
+        border-left: 6px solid #63b3ed;
     }
+    /* Kartu Menu KIB A Tanah */
     .card-menu-tanah {
-        background: linear-gradient(135deg, #134e5e 0%, #71b280 100%);
-        padding: 24px;
-        border-radius: 12px;
+        background: linear-gradient(135deg, #134e5e 0%, #285e61 100%);
+        padding: 28px;
+        border-radius: 14px;
         color: white;
-        box-shadow: 0 4px 12px rgba(19,78,94,0.25);
+        box-shadow: 0 8px 20px rgba(19,78,94,0.3);
         margin-bottom: 15px;
+        border-left: 6px solid #68d391;
     }
     .stButton>button {
         width: 100%;
@@ -60,13 +70,15 @@ st.markdown(
         font-size: 15px;
         transition: all 0.3s ease;
         border: none;
-        background-color: white;
-        color: #1e3c72;
+        background-color: #ffffff;
+        color: #1a365d;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     .stButton>button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.2);
-        background-color: #f8f9fa;
+        box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+        background-color: #f7fafc;
+        color: #2b6cb0;
     }
     </style>
 """,
@@ -472,11 +484,6 @@ df_kendaraan = load_kendaraan_data()
 df_tanah = load_kiba_data()
 
 
-def format_rupiah(nilai):
-  formatted = f"{nilai:,.2f}"
-  return "Rp " + formatted.replace(",", "X").replace(".", ",").replace("X", ".")
-
-
 if "page" not in st.session_state:
   st.session_state.page = "menu"
 if "module" not in st.session_state:
@@ -490,7 +497,7 @@ st.markdown(
     """
     <div class="main-header">
         <h2>🏛️ SIMANTAP - ASET PEMERINTAH DAERAH</h2>
-        <p>Sistem Informasi Manajemen Aset & Inventaris Kendaraan dan Tanah</p>
+        <p>Sistem Informasi Manajemen Aset & Inventaris Kendaraan dan Tanah (BMD)</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -498,8 +505,8 @@ st.markdown(
 
 if st.session_state.page == "menu":
   st.markdown(
-      "<h4 style='text-align:center; color:#34495e; margin-bottom:25px;'>Silakan"
-      " Pilih Jenis Modul Aset Daerah</h4>",
+      "<h4 style='text-align:center; color:#2d3748; margin-bottom:25px;"
+      " font-weight:600;'>Silakan Pilih Jenis Modul Aset Daerah</h4>",
       unsafe_allow_html=True,
   )
 
@@ -508,9 +515,9 @@ if st.session_state.page == "menu":
   with col1:
     st.markdown(
         f"""
-        <div class="card-menu">
-            <h3>🚗 Kendaraan Dinas</h3>
-            <p><b>Total Unit Terdata:</b> {len(df_kendaraan):,} Data<br>Kelola data mobil, motor, & pick-up dinas.</p>
+        <div class="card-menu-kendaraan">
+            <h3 style="margin-top:0; color:#fff;">🚗 Kendaraan Dinas</h3>
+            <p style="color:#e2e8f0; font-size:14px;"><b>Total Unit Terdata:</b> {len(df_kendaraan):,} Data<br>Kelola data mobil, motor, & pick-up dinas.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -526,8 +533,8 @@ if st.session_state.page == "menu":
     st.markdown(
         f"""
         <div class="card-menu-tanah">
-            <h3>🌍 KIB A - Tanah</h3>
-            <p><b>Total Bidang Terdata:</b> {len(df_tanah):,} Data<br>Kelola data aset tanah dan alamat lokasi.</p>
+            <h3 style="margin-top:0; color:#fff;">🌍 KIB A - Tanah</h3>
+            <p style="color:#e2e8f0; font-size:14px;"><b>Total Bidang Terdata:</b> {len(df_tanah):,} Data<br>Kelola data aset tanah dan alamat lokasi.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -550,7 +557,13 @@ elif st.session_state.page == "table":
       st.cache_data.clear()
       st.rerun()
 
-  st.markdown(f"### 📂 {st.session_state.title}")
+  module_accent = (
+      "#1a365d" if st.session_state.module == "kendaraan" else "#134e5e"
+  )
+  st.markdown(
+      f"<h3 style='color:{module_accent};'>📂 {st.session_state.title}</h3>",
+      unsafe_allow_html=True,
+  )
 
   if st.session_state.module == "kendaraan":
     active_df = df_kendaraan
@@ -666,12 +679,15 @@ elif st.session_state.page == "table":
           "Keterangan / Isi Data": cleaned_values,
       })
 
+      table_bg_color = (
+          "1a365d" if st.session_state.module == "kendaraan" else "134e5e"
+      )
       styled_preview = (
           detail_df.style.set_table_styles([
               {
                   "selector": "th",
                   "props": [
-                      ("background-color", "#1e3c72"),
+                      ("background-color", f"#{table_bg_color}"),
                       ("color", "white"),
                       ("font-weight", "bold"),
                       ("border", "1px solid black"),
@@ -691,7 +707,7 @@ elif st.session_state.page == "table":
       )
 
       st.markdown(
-          "<p style='font-weight:600; color:#1e3c72;'>Preview Tabel Bergaris:</p>",
+          "<p style='font-weight:600; color:#1a365d;'>Preview Tabel Bergaris:</p>",
           unsafe_allow_html=True,
       )
       st.dataframe(styled_preview, use_container_width=True, height=450)
@@ -700,7 +716,7 @@ elif st.session_state.page == "table":
 
       with col_e1:
 
-        def create_styled_vertical_excel(cols, vals):
+        def create_styled_vertical_excel(cols, vals, bg_hex):
           card_df = pd.DataFrame(
               {"Atribut / Kolom Data": cols, "Keterangan / Isi Data": vals}
           )
@@ -717,7 +733,7 @@ elif st.session_state.page == "table":
               bottom=Side(style="thin", color="888888"),
           )
           header_fill = PatternFill(
-              start_color="1E3C72", end_color="1E3C72", fill_type="solid"
+              start_color=bg_hex, end_color=bg_hex, fill_type="solid"
           )
           header_font = Font(
               name="Calibri", size=11, bold=True, color="FFFFFF"
@@ -749,7 +765,9 @@ elif st.session_state.page == "table":
           wb.save(final_output)
           return final_output.getvalue()
 
-        excel_data = create_styled_vertical_excel(columns_list, cleaned_values)
+        excel_data = create_styled_vertical_excel(
+            columns_list, cleaned_values, table_bg_color
+        )
         st.download_button(
             label="📊 Download Excel Bergaris",
             data=excel_data,
@@ -768,15 +786,21 @@ elif st.session_state.page == "table":
 
       with col_e3:
 
-        def create_pdf_detail(cols, vals):
+        def create_pdf_detail(cols, vals, module_type):
           pdf = FPDF(orientation="P", unit="mm", format="A4")
           pdf.add_page()
           pdf.set_font("Arial", "B", 14)
-          pdf.set_text_color(30, 60, 114)
+          if module_type == "kendaraan":
+            pdf.set_text_color(26, 54, 93)
+          else:
+            pdf.set_text_color(19, 78, 94)
           pdf.cell(0, 10, "DETAIL INFORMASI ASET PEMERINTAH DAERAH", 0, 1, "C")
           pdf.ln(4)
           pdf.set_font("Arial", "B", 10)
-          pdf.set_fill_color(30, 60, 114)
+          if module_type == "kendaraan":
+            pdf.set_fill_color(26, 54, 93)
+          else:
+            pdf.set_fill_color(19, 78, 94)
           pdf.set_text_color(255, 255, 255)
           pdf.cell(70, 7, "Atribut / Kolom Data", 1, 0, "C", True)
           pdf.cell(120, 7, "Keterangan / Isi Data", 1, 1, "C", True)
@@ -797,7 +821,9 @@ elif st.session_state.page == "table":
           else:
             return output_pdf.encode("latin1")
 
-        pdf_bytes = create_pdf_detail(columns_list, cleaned_values)
+        pdf_bytes = create_pdf_detail(
+            columns_list, cleaned_values, st.session_state.module
+        )
         st.download_button(
             label="📑 Download PDF Bergaris",
             data=pdf_bytes,
