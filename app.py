@@ -107,7 +107,6 @@ def load_data():
         file_path, sheet_name="KENDARAAN DINAS", header=None
     )
 
-    # Deteksi baris header secara akurat berdasarkan kata kunci di dalam file Excel KIB B
     header_row_idx = 13
     for idx, row in df_raw.head(20).iterrows():
       row_str = " ".join([str(val).lower() for val in row.values])
@@ -148,10 +147,23 @@ def load_data():
       final_cols = h1
       data_start_idx = header_row_idx + 1
 
-    # Buat nama kolom unik agar tidak error duplikasi di pandas
+    # Ubah penamaan kolom sesuai permintaan
+    transformed_cols = []
+    for c in final_cols:
+      c_lower = c.lower()
+      if "pembelian" in c_lower:
+        transformed_cols.append("Tahun Pembuatan")
+      elif c_lower.startswith("tahun"):
+        # Ganti kata Tahun menjadi Nomor
+        replaced = c.replace("Tahun", "Nomor").replace("tahun", "Nomor")
+        transformed_cols.append(replaced)
+      else:
+        transformed_cols.append(c)
+
+    # Buat nama kolom unik agar tidak terjadi duplikasi index pandas
     seen = {}
     unique_cols = []
-    for c in final_cols:
+    for c in transformed_cols:
       if c in seen:
         seen[c] += 1
         unique_cols.append(f"{c}_{seen[c]}")
@@ -165,7 +177,10 @@ def load_data():
       for i in range(len(unique_cols), df.shape[1]):
         df.rename(columns={df.columns[i]: f"Kolom_{i}"}, inplace=True)
 
-    df = df.reset_index(drop=True)
+    # Hapus kolom ke-14, 19, dan 20 (index 13, 18, 19 dalam zero-based index)
+    drop_indices = [13, 18, 19]
+    valid_drop_indices = [i for i in drop_indices if i < len(df.columns)]
+    df = df.drop(df.columns[valid_drop_indices], axis=1).reset_index(drop=True)
 
     # Validasi baris berdasarkan kolom pertama (No. Urut)
     first_col = df.columns[0]
@@ -200,7 +215,7 @@ def load_data():
             .str.strip()
         )
 
-      # Pencarian kolom Harga secara dinamis
+      # Pencarian kolom Harga secara dinamis, dikali 1000
       harga_col = next(
           (
               c
@@ -212,12 +227,15 @@ def load_data():
           None,
       )
       if harga_col:
-        df["Harga_Clean"] = pd.to_numeric(
-            df[harga_col]
-            .astype(str)
-            .str.replace(r"[^\d.]", "", regex=True),
-            errors="coerce",
-        ).fillna(0)
+        df["Harga_Clean"] = (
+            pd.to_numeric(
+                df[harga_col]
+                .astype(str)
+                .str.replace(r"[^\d.]", "", regex=True),
+                errors="coerce",
+            ).fillna(0)
+            * 1000
+        )
 
       # Deteksi Kategori Kendaraan Otomatis
       def deteksi_kategori(row):
