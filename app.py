@@ -16,38 +16,83 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Background Utama Aplikasi */
+    .stApp {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+
+    /* Header Utama */
     .main-header {
-        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        padding: 30px;
-        border-radius: 12px;
+        background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+        padding: 35px;
+        border-radius: 16px;
         color: white;
         text-align: center;
         margin-bottom: 30px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        border: 1px solid rgba(255,255,255,0.1);
     }
     .main-header h2 {
         margin: 0;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         font-weight: 700;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.8px;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
     }
     .main-header p {
-        margin: 8px 0 0 0;
-        font-size: 15px;
-        opacity: 0.85;
+        margin: 10px 0 0 0;
+        font-size: 16px;
+        opacity: 0.9;
+        font-weight: 300;
     }
+
+    /* Kartu KIB Kustom */
+    .kib-card-kendaraan {
+        background: linear-gradient(135deg, #2b5876 0%, #4e4376 100%);
+        padding: 25px;
+        border-radius: 16px;
+        color: white;
+        box-shadow: 0 6px 20px rgba(43, 88, 118, 0.3);
+        margin-bottom: 20px;
+        border: 1px solid rgba(255,255,255,0.15);
+    }
+    
+    .kib-card-tanah {
+        background: linear-gradient(135deg, #134e5e 0%, #71b280 100%);
+        padding: 25px;
+        border-radius: 16px;
+        color: white;
+        box-shadow: 0 6px 20px rgba(19, 78, 94, 0.3);
+        margin-bottom: 20px;
+        border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .kib-card h3 {
+        margin-top: 0;
+        font-size: 22px;
+        font-weight: 700;
+    }
+
+    .kib-card p {
+        font-size: 15px;
+        opacity: 0.95;
+        margin-bottom: 20px;
+    }
+
+    /* Styling Tombol Umum */
     .stButton>button {
         width: 100%;
-        border-radius: 8px;
+        border-radius: 10px;
         font-weight: 600;
-        padding: 14px;
+        padding: 12px;
         font-size: 15px;
         transition: all 0.3s ease;
         border: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
     .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.2);
     }
     </style>
 """,
@@ -229,7 +274,6 @@ def load_all_data():
 
     df_t = df_t.loc[:, ~df_t.columns.astype(str).str.contains("^Unnamed")]
 
-    # Remove 'Letak/' prefix except for 'Letak/ alamat'
     cleaned_cols = []
     for col in df_t.columns:
       col_str = str(col).strip()
@@ -350,8 +394,8 @@ st.markdown(
 
 if st.session_state.page == "menu":
   st.markdown(
-      "<h4 style='text-align:center; color:#34495e; margin-bottom:25px;'>Silakan"
-      " Pilih Modul KIB Aset Daerah</h4>",
+      "<h4 style='text-align:center; color:#2c3e50; margin-bottom:25px;"
+      " font-weight:600;'>Silakan Pilih Modul KIB Aset Daerah</h4>",
       unsafe_allow_html=True,
   )
 
@@ -361,33 +405,41 @@ if st.session_state.page == "menu":
   tot_val_t = df_tanah["Harga_Clean"].sum() if not df_tanah.empty else 0
   len_t = len(df_tanah)
 
-  col1, col2 = st.columns(2, gap="medium")
+  col1, col2 = st.columns(2, gap="large")
 
   with col1:
-    with st.container(border=True):
-      st.markdown("### 🚗 *KIB B - Kendaraan Dinas*")
-      st.write(
-          f"Total Unit: *{len_k:,} Data*\n\nTotal Nilai Aset:"
-          f" *{format_rupiah(tot_val_k)}*"
-      )
-      if st.button("Kelola KIB B (Kendaraan)", key="btn_kib_b"):
-        st.session_state.module = "kendaraan"
-        st.session_state.page = "sub_menu_kendaraan"
-        st.rerun()
+    st.markdown(
+        f"""
+        <div class="kib-card-kendaraan">
+            <h3>🚗 KIB B - Kendaraan Dinas</h3>
+            <p>Total Unit: <b>{len_k:,} Data</b><br>
+            Total Nilai Aset: <b>{format_rupiah(tot_val_k)}</b></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Kelola KIB B (Kendaraan)", key="btn_kib_b"):
+      st.session_state.module = "kendaraan"
+      st.session_state.page = "sub_menu_kendaraan"
+      st.rerun()
 
   with col2:
-    with st.container(border=True):
-      st.markdown("### 🗺️ *KIB A - Tanah*")
-      st.write(
-          f"Total Bidang: *{len_t:,} Data*\n\nTotal Nilai Aset:"
-          f" *{format_rupiah(tot_val_t)}*"
-      )
-      if st.button("Kelola KIB A (Tanah)", key="btn_kib_a"):
-        st.session_state.module = "tanah"
-        st.session_state.keyword = ""
-        st.session_state.title = "KIB A - Tanah"
-        st.session_state.page = "table"
-        st.rerun()
+    st.markdown(
+        f"""
+        <div class="kib-card-tanah">
+            <h3>🗺️ KIB A - Tanah</h3>
+            <p>Total Bidang: <b>{len_t:,} Data</b><br>
+            Total Nilai Aset: <b>{format_rupiah(tot_val_t)}</b></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Kelola KIB A (Tanah)", key="btn_kib_a"):
+      st.session_state.module = "tanah"
+      st.session_state.keyword = ""
+      st.session_state.title = "KIB A - Tanah"
+      st.session_state.page = "table"
+      st.rerun()
 
 elif st.session_state.page == "sub_menu_kendaraan":
   col_back, _ = st.columns([1.5, 8.5])
@@ -397,8 +449,8 @@ elif st.session_state.page == "sub_menu_kendaraan":
       st.rerun()
 
   st.markdown(
-      "<h4 style='text-align:center; color:#34495e; margin-bottom:25px;'>Pilih"
-      " Kategori Kendaraan Dinas</h4>",
+      "<h4 style='text-align:center; color:#2c3e50; margin-bottom:25px;"
+      " font-weight:600;'>Pilih Kategori Kendaraan Dinas</h4>",
       unsafe_allow_html=True,
   )
 
@@ -419,51 +471,70 @@ elif st.session_state.page == "sub_menu_kendaraan":
   p_mobil, t_mobil = hitung_sub_k("Mobil")
   p_pickup, t_pickup = hitung_sub_k("Pick Up")
 
-  c1, c2 = st.columns(2, gap="medium")
+  c1, c2 = st.columns(2, gap="large")
   with c1:
-    with st.container(border=True):
-      st.markdown("### 📦 *Semua Kendaraan*")
-      st.write(
-          f"Total Unit: *{t_semua:,} Data\n\nTotal Nilai: *{p_semua}**"
-      )
-      if st.button("Buka Semua Kendaraan", key="sub_semua"):
-        st.session_state.keyword = ""
-        st.session_state.title = "Semua Kendaraan Dinas"
-        st.session_state.page = "table"
-        st.rerun()
+    st.markdown(
+        f"""
+        <div class="kib-card-kendaraan" style="background: linear-gradient(135deg, #3a6073 0%, #16222a 100%);">
+            <h3>📦 Semua Kendaraan</h3>
+            <p>Total Unit: <b>{t_semua:,} Data</b><br>Total Nilai: <b>{p_semua}</b></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Buka Semua Kendaraan", key="sub_semua"):
+      st.session_state.keyword = ""
+      st.session_state.title = "Semua Kendaraan Dinas"
+      st.session_state.page = "table"
+      st.rerun()
+
     st.write("")
-    with st.container(border=True):
-      st.markdown("### 🚗 *Mobil*")
-      st.write(
-          f"Total Unit: *{t_mobil:,} Data\n\nTotal Nilai: *{p_mobil}**"
-      )
-      if st.button("Buka Data Mobil", key="sub_mobil"):
-        st.session_state.keyword = "Mobil"
-        st.session_state.title = "Mobil"
-        st.session_state.page = "table"
-        st.rerun()
+    st.markdown(
+        f"""
+        <div class="kib-card-kendaraan" style="background: linear-gradient(135deg, #1d976c 0%, #939b62 100%);">
+            <h3>🚗 Mobil</h3>
+            <p>Total Unit: <b>{t_mobil:,} Data</b><br>Total Nilai: <b>{p_mobil}</b></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Buka Data Mobil", key="sub_mobil"):
+      st.session_state.keyword = "Mobil"
+      st.session_state.title = "Mobil"
+      st.session_state.page = "table"
+      st.rerun()
+
   with c2:
-    with st.container(border=True):
-      st.markdown("### 🏍️ *Sepeda Motor*")
-      st.write(
-          f"Total Unit: *{t_motor:,} Data\n\nTotal Nilai: *{p_motor}**"
-      )
-      if st.button("Buka Sepeda Motor", key="sub_motor"):
-        st.session_state.keyword = "Sepeda Motor"
-        st.session_state.title = "Sepeda Motor"
-        st.session_state.page = "table"
-        st.rerun()
+    st.markdown(
+        f"""
+        <div class="kib-card-kendaraan" style="background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);">
+            <h3>🏍️ Sepeda Motor</h3>
+            <p>Total Unit: <b>{t_motor:,} Data</b><br>Total Nilai: <b>{p_motor}</b></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Buka Sepeda Motor", key="sub_motor"):
+      st.session_state.keyword = "Sepeda Motor"
+      st.session_state.title = "Sepeda Motor"
+      st.session_state.page = "table"
+      st.rerun()
+
     st.write("")
-    with st.container(border=True):
-      st.markdown("### 🚙 *Pick Up*")
-      st.write(
-          f"Total Unit: *{t_pickup:,} Data\n\nTotal Nilai: *{p_pickup}**"
-      )
-      if st.button("Buka Pick Up", key="sub_pickup"):
-        st.session_state.keyword = "Pick Up"
-        st.session_state.title = "Pick Up"
-        st.session_state.page = "table"
-        st.rerun()
+    st.markdown(
+        f"""
+        <div class="kib-card-kendaraan" style="background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%); color: #fff;">
+            <h3>🚙 Pick Up</h3>
+            <p>Total Unit: <b>{t_pickup:,} Data</b><br>Total Nilai: <b>{p_pickup}</b></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Buka Pick Up", key="sub_pickup"):
+      st.session_state.keyword = "Pick Up"
+      st.session_state.title = "Pick Up"
+      st.session_state.page = "table"
+      st.rerun()
 
 elif st.session_state.page == "table":
   col_back, col_ref, _ = st.columns([1.5, 1.5, 7])
