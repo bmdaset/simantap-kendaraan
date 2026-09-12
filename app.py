@@ -42,25 +42,35 @@ st.markdown(
         font-size: 15px;
         color: #edf2f7;
     }
-    /* Kartu Menu Kendaraan - Nuansa Cerah & Elegan */
+    /* Kartu Menu Kendaraan */
     .card-menu-kendaraan {
         background: linear-gradient(135deg, #2b6cb0 0%, #4299e1 100%);
-        padding: 28px;
+        padding: 24px;
         border-radius: 14px;
         color: white;
         box-shadow: 0 10px 25px rgba(43,108,176,0.35);
         margin-bottom: 15px;
         border-left: 6px solid #bee3f8;
     }
-    /* Kartu Menu KIB A Tanah - Nuansa Hijau Tanah Cerah & Elegan */
+    /* Kartu Menu KIB A Tanah */
     .card-menu-tanah {
         background: linear-gradient(135deg, #276749 0%, #38a169 100%);
-        padding: 28px;
+        padding: 24px;
         border-radius: 14px;
         color: white;
         box-shadow: 0 10px 25px rgba(39,103,73,0.35);
         margin-bottom: 15px;
         border-left: 6px solid #c6f6d5;
+    }
+    /* Kartu Menu KIB C Gedung */
+    .card-menu-gedung {
+        background: linear-gradient(135deg, #9b2c2c 0%, #e53e3e 100%);
+        padding: 24px;
+        border-radius: 14px;
+        color: white;
+        box-shadow: 0 10px 25px rgba(155,44,44,0.35);
+        margin-bottom: 15px;
+        border-left: 6px solid #fed7d7;
     }
     .stButton>button {
         width: 100%;
@@ -372,7 +382,6 @@ def load_kiba_data():
     cleaned_cols = []
     for idx_col, c in enumerate(final_cols):
       c_str = str(c).strip()
-
       if idx_col == 9 or c_str.lower() == "letak/":
         c_str = "Tanggal Sertifikat"
       else:
@@ -477,9 +486,174 @@ def load_kiba_data():
     return pd.DataFrame()
 
 
+@st.cache_data
+def load_kibc_data():
+  file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
+  if not os.path.exists(file_path):
+    all_excel = glob.glob("*.xlsx") + glob.glob("*.xls")
+    if all_excel:
+      file_path = all_excel[0]
+    else:
+      return pd.DataFrame()
+
+  try:
+    xls = pd.ExcelFile(file_path)
+    sheet_names = xls.sheet_names
+    target_sheet = next(
+        (
+            s
+            for s in sheet_names
+            if "gedung" in s.lower()
+            or "bangunan" in s.lower()
+            or "kib c" in s.lower()
+            or "kibc" in s.lower()
+        ),
+        None,
+    )
+
+    if not target_sheet:
+      return pd.DataFrame()
+
+    df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
+
+    header_row_idx = 0
+    for idx, row in df_raw.head(25).iterrows():
+      row_str = " ".join([str(val).lower() for val in row.values])
+      if (
+          "gedung" in row_str
+          or "bangunan" in row_str
+          or "kondisi" in row_str
+          or "luas" in row_str
+      ):
+        header_row_idx = idx
+        break
+
+    h1 = (
+        df_raw.iloc[header_row_idx]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .tolist()
+    )
+    if header_row_idx + 1 < len(df_raw):
+      h2 = (
+          df_raw.iloc[header_row_idx + 1]
+          .fillna("")
+          .astype(str)
+          .str.strip()
+          .tolist()
+      )
+      combined_cols = []
+      last_main = ""
+      for m, s in zip(h1, h2):
+        if m != "" and not m.startswith("Unnamed"):
+          last_main = m
+        if s != "" and not s.startswith("Unnamed"):
+          if last_main and last_main.lower() not in s.lower():
+            combined_cols.append(f"{last_main} - {s}")
+          else:
+            combined_cols.append(s)
+        else:
+          combined_cols.append(last_main if last_main else "Kolom")
+      final_cols = combined_cols
+      data_start_idx = header_row_idx + 2
+    else:
+      final_cols = h1
+      data_start_idx = header_row_idx + 1
+
+    cleaned_cols = []
+    for idx_col, c in enumerate(final_cols):
+      c_str = str(c).strip()
+      if not c_str or c_str.lower() == "none" or c_str.startswith("Unnamed"):
+        c_str = f"Kolom_{idx_col}"
+      cleaned_cols.append(c_str)
+
+    seen = {}
+    unique_cols = []
+    for c in cleaned_cols:
+      if c in seen:
+        seen[c] += 1
+        unique_cols.append(f"{c}_{seen[c]}")
+      else:
+        seen[c] = 0
+        unique_cols.append(c)
+
+    df = df_raw.iloc[data_start_idx:].copy()
+    df.columns = unique_cols[: df.shape[1]]
+    if df.shape[1] > len(unique_cols):
+      for i in range(len(unique_cols), df.shape[1]):
+        df.rename(columns={df.columns[i]: f"Kolom_{i}"}, inplace=True)
+
+    df = df.dropna(how="all").reset_index(drop=True)
+    df = df[df.iloc[:, 0].notna()].reset_index(drop=True)
+
+    if not df.empty:
+      first_col_name = df.columns[0]
+      df = df[
+          ~df[first_col_name]
+          .astype(str)
+          .str.lower()
+          .str.contains("jumlah|total|n o", na=False)
+      ].reset_index(drop=True)
+
+    df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
+    df["Harga_Clean"] = 0.0
+
+    if not df.empty:
+      skpd_col = next(
+          (
+              c
+              for c in df.columns
+              if c == "SKPD"
+              or "skpd" in c.lower()
+              or "dinas" in c.lower()
+              or "unit" in c.lower()
+          ),
+          None,
+      )
+      if skpd_col:
+        df["SKPD_Nama"] = (
+            df[skpd_col]
+            .ffill()
+            .fillna("DINAS / INSTANSI LAINNYA")
+            .astype(str)
+            .str.upper()
+            .str.strip()
+        )
+        df[skpd_col] = df["SKPD_Nama"]
+
+      harga_col = next(
+          (
+              c
+              for c in df.columns
+              if "harga" in c.lower()
+              or "rupiah" in c.lower()
+              or "nilai" in c.lower()
+          ),
+          None,
+      )
+      if harga_col:
+        raw_harga = pd.to_numeric(
+            df[harga_col].astype(str).str.replace(r"[^\d.]", "", regex=True),
+            errors="coerce",
+        ).fillna(0)
+        if raw_harga.mean() > 0 and raw_harga.mean() < 100000:
+          calculated_harga = raw_harga * 1000
+        else:
+          calculated_harga = raw_harga
+
+        df["Harga_Clean"] = calculated_harga
+        df[harga_col] = calculated_harga
+
+    return df
+  except Exception as e:
+    print("Error Load KIB C Gedung:", e)
+    return pd.DataFrame()
+
+
 df_kendaraan = load_kendaraan_data()
 df_tanah = load_kiba_data()
-
+df_gedung = load_kibc_data()
 
 if "page" not in st.session_state:
   st.session_state.page = "menu"
@@ -492,33 +666,28 @@ if "title" not in st.session_state:
 
 if st.session_state.page == "table":
   if st.session_state.module == "kendaraan":
-    st.markdown(
-        """
-        <style>
-        .stApp {
-            background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%);
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    bg_style = "linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%)"
+  elif st.session_state.module == "tanah":
+    bg_style = "linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%)"
   else:
-    st.markdown(
-        """
+    bg_style = "linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%)"
+
+  st.markdown(
+      f"""
         <style>
-        .stApp {
-            background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
-        }
+        .stApp {{
+            background: {bg_style};
+        }}
         </style>
         """,
-        unsafe_allow_html=True,
-    )
+      unsafe_allow_html=True,
+  )
 
 st.markdown(
     """
     <div class="main-header">
         <h2>🏛️ SIMANTAP - ASET PEMERINTAH DAERAH</h2>
-        <p>Sistem Informasi Manajemen Aset & Inventaris Kendaraan dan Tanah (BMD)</p>
+        <p>Sistem Informasi Manajemen Aset & Inventaris Kendaraan, Tanah, dan Gedung (BMD)</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -531,19 +700,19 @@ if st.session_state.page == "menu":
       unsafe_allow_html=True,
   )
 
-  col1, col2 = st.columns(2, gap="medium")
+  col1, col2, col3 = st.columns(3, gap="medium")
 
   with col1:
     st.markdown(
         f"""
         <div class="card-menu-kendaraan">
-            <h3 style="margin-top:0; color:#fff;">🚗 Kendaraan Dinas</h3>
-            <p style="color:#f7fafc; font-size:14px;"><b>Total Unit Terdata:</b> {len(df_kendaraan):,} Data<br>Kelola data mobil, motor, pick-up, & alat berat dinas.</p>
+            <h3 style="margin-top:0; color:#fff;">🚗 Kendaraan</h3>
+            <p style="color:#f7fafc; font-size:13px;"><b>Total Unit:</b> {len(df_kendaraan):,} Data<br>Mobil, motor, & alat berat.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    if st.button("Kelola Kendaraan Dinas", key="btn_mod_kendaraan"):
+    if st.button("Kelola Kendaraan", key="btn_mod_kendaraan"):
       st.session_state.module = "kendaraan"
       st.session_state.keyword = ""
       st.session_state.title = "Semua Kendaraan Dinas"
@@ -555,7 +724,7 @@ if st.session_state.page == "menu":
         f"""
         <div class="card-menu-tanah">
             <h3 style="margin-top:0; color:#fff;">🌍 KIB A - Tanah</h3>
-            <p style="color:#f7fafc; font-size:14px;"><b>Total Bidang Terdata:</b> {len(df_tanah):,} Data<br>Kelola data aset tanah dan alamat lokasi.</p>
+            <p style="color:#f7fafc; font-size:13px;"><b>Total Bidang:</b> {len(df_tanah):,} Data<br>Aset tanah & lokasi.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -564,6 +733,23 @@ if st.session_state.page == "menu":
       st.session_state.module = "tanah"
       st.session_state.keyword = ""
       st.session_state.title = "KIB A - Tanah"
+      st.session_state.page = "table"
+      st.rerun()
+
+  with col3:
+    st.markdown(
+        f"""
+        <div class="card-menu-gedung">
+            <h3 style="margin-top:0; color:#fff;">🏢 KIB C - Gedung</h3>
+            <p style="color:#f7fafc; font-size:13px;"><b>Total Gedung:</b> {len(df_gedung):,} Data<br>Gedung & bangunan kantor.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.button("Kelola KIB C Gedung", key="btn_mod_gedung"):
+      st.session_state.module = "gedung"
+      st.session_state.keyword = ""
+      st.session_state.title = "KIB C - Gedung dan Bangunan"
       st.session_state.page = "table"
       st.rerun()
 
@@ -578,9 +764,13 @@ elif st.session_state.page == "table":
       st.cache_data.clear()
       st.rerun()
 
-  module_accent = (
-      "#2b6cb0" if st.session_state.module == "kendaraan" else "#276749"
-  )
+  if st.session_state.module == "kendaraan":
+    module_accent = "#2b6cb0"
+  elif st.session_state.module == "tanah":
+    module_accent = "#276749"
+  else:
+    module_accent = "#9b2c2c"
+
   st.markdown(
       f"<h3 style='color:{module_accent}; font-weight:700;'>📂"
       f" {st.session_state.title}</h3>",
@@ -592,8 +782,10 @@ elif st.session_state.page == "table":
     keyword = st.session_state.keyword
     if keyword != "":
       active_df = active_df[active_df["Kategori_Jenis"] == keyword]
-  else:
+  elif st.session_state.module == "tanah":
     active_df = df_tanah
+  else:
+    active_df = df_gedung
 
   pilih_skpd = "Semua SKPD"
   if not active_df.empty:
@@ -608,12 +800,15 @@ elif st.session_state.page == "table":
 
   if st.session_state.module == "tanah":
     search_query = st.text_input(
-        "🔍 Cari KIB A Tanah (Berdasarkan Alamat, Keterangan, No. Sertifikat,"
-        " Nama Barang, dll)..."
+        "🔍 Cari KIB A Tanah (Alamat, Keterangan, No. Sertifikat, dll)..."
+    )
+  elif st.session_state.module == "kendaraan":
+    search_query = st.text_input(
+        "🔍 Cari data Kendaraan (No. Polisi, Merk, No. Rangka, dll)..."
     )
   else:
     search_query = st.text_input(
-        "🔍 Cari data Kendaraan (No. Polisi, Merk, No. Rangka, dll)..."
+        "🔍 Cari KIB C Gedung (Nama Gedung, Lokasi, Kondisi, dll)..."
     )
 
   if search_query:
@@ -639,16 +834,18 @@ elif st.session_state.page == "table":
   st.dataframe(display_df, use_container_width=True, height=400)
 
   st.markdown("---")
+
+  # --- REKAPITULASI DENGAN JUMLAH BARANG & TOTAL NILAI RUPIAH ---
   if st.session_state.module == "kendaraan":
     rekap_title = (
-        f"📊 Rekapitulasi Kategori Kendaraan: {pilih_skpd}"
+        f"📊 Rekapitulasi Kendaraan: {pilih_skpd}"
         if pilih_skpd != "Semua SKPD"
-        else "📊 Rekapitulasi Keseluruhan Kategori Kendaraan per SKPD"
+        else "📊 Rekapitulasi Kategori Kendaraan & Total Nilai per SKPD"
     )
     st.markdown(f"#### {rekap_title}")
 
     if not active_df.empty:
-      summary_pivot = (
+      summary_count = (
           active_df.pivot_table(
               index="SKPD_Nama",
               columns="Kategori_Jenis",
@@ -658,19 +855,74 @@ elif st.session_state.page == "table":
           )
           .reset_index()
       )
-      kat_cols = [c for c in summary_pivot.columns if c != "SKPD_Nama"]
-      summary_pivot["Total Unit"] = summary_pivot[kat_cols].sum(axis=1)
-      st.dataframe(summary_pivot, use_container_width=True)
+      kat_cols = [c for c in summary_count.columns if c != "SKPD_Nama"]
+      summary_count["Total Unit"] = summary_count[kat_cols].sum(axis=1)
+
+      summary_harga = (
+          active_df.groupby("SKPD_Nama")["Harga_Clean"].sum().reset_index()
+      )
+      summary_harga.rename(
+          columns={"Harga_Clean": "Total Nilai (Rp)"}, inplace=True
+      )
+
+      final_summary = pd.merge(summary_count, summary_harga, on="SKPD_Nama")
+      final_summary["Total Nilai (Rp)"] = final_summary[
+          "Total Nilai (Rp)"
+      ].apply(lambda x: f"Rp {x:,.0f}".replace(",", "."))
+
+      st.dataframe(final_summary, use_container_width=True)
     else:
       st.info("Tidak ada data kendaraan untuk ditampilkan.")
-  else:
-    st.markdown("#### 📊 Ringkasan Jumlah Bidang Tanah per SKPD")
+
+  elif st.session_state.module == "tanah":
+    st.markdown(
+        "#### 📊 Ringkasan Jumlah Bidang & Total Nilai Aset Tanah per SKPD"
+    )
     if not active_df.empty and "SKPD_Nama" in active_df.columns:
-      summary_tanah = active_df["SKPD_Nama"].value_counts().reset_index()
-      summary_tanah.columns = ["Nama SKPD / Dinas", "Jumlah Bidang Tanah"]
+      summary_tanah = (
+          active_df.groupby("SKPD_Nama")
+          .agg(
+              Jumlah_Bidang=(active_df.columns[0], "count"),
+              Total_Nilai=("Harga_Clean", "sum"),
+          )
+          .reset_index()
+      )
+      summary_tanah.columns = [
+          "Nama SKPD / Dinas",
+          "Jumlah Bidang Tanah",
+          "Total Nilai (Rp)",
+      ]
+      summary_tanah["Total Nilai (Rp)"] = summary_tanah["Total Nilai (Rp)"].apply(
+          lambda x: f"Rp {x:,.0f}".replace(",", ".")
+      )
       st.dataframe(summary_tanah, use_container_width=True)
     else:
       st.info("Tidak ada data ringkasan tanah.")
+
+  else:
+    st.markdown(
+        "#### 📊 Ringkasan Jumlah Unit Gedung & Total Nilai Aset Gedung per SKPD"
+    )
+    if not active_df.empty and "SKPD_Nama" in active_df.columns:
+      summary_gedung = (
+          active_df.groupby("SKPD_Nama")
+          .agg(
+              Jumlah_Gedung=(active_df.columns[0], "count"),
+              Total_Nilai=("Harga_Clean", "sum"),
+          )
+          .reset_index()
+      )
+      summary_gedung.columns = [
+          "Nama SKPD / Dinas",
+          "Jumlah Gedung",
+          "Total Nilai (Rp)",
+      ]
+      summary_gedung["Total Nilai (Rp)"] = summary_gedung[
+          "Total Nilai (Rp)"
+      ].apply(lambda x: f"Rp {x:,.0f}".replace(",", "."))
+      st.dataframe(summary_gedung, use_container_width=True)
+    else:
+      st.info("Tidak ada data ringkasan gedung.")
 
   st.markdown("---")
   st.markdown("#### 🔍 Preview Kartu Detail Bergaris & Download")
@@ -702,7 +954,7 @@ elif st.session_state.page == "table":
         if pd.isna(val):
           cleaned_values.append("None")
         elif isinstance(val, (int, float)):
-          if "harga" in col.lower():
+          if "harga" in col.lower() or "nilai" in col.lower():
             cleaned_values.append(f"{int(val):,}".replace(",", "."))
           else:
             if val == int(val):
@@ -711,7 +963,6 @@ elif st.session_state.page == "table":
               cleaned_values.append(str(val))
         else:
           val_str = str(val).strip()
-          # Hilangkan 00:00:00 pada format tanggal/timestamp
           if " 00:00:00" in val_str:
             val_str = val_str.replace(" 00:00:00", "")
           cleaned_values.append(val_str)
@@ -721,15 +972,12 @@ elif st.session_state.page == "table":
           "Keterangan / Isi Data": cleaned_values,
       })
 
-      table_bg_color = (
-          "2b6cb0" if st.session_state.module == "kendaraan" else "276749"
-      )
       styled_preview = (
           detail_df.style.set_table_styles([
               {
                   "selector": "th",
                   "props": [
-                      ("background-color", f"#{table_bg_color}"),
+                      ("background-color", f"{module_accent}"),
                       ("color", "white"),
                       ("font-weight", "bold"),
                       ("border", "1px solid black"),
@@ -749,7 +997,8 @@ elif st.session_state.page == "table":
       )
 
       st.markdown(
-          "<p style='font-weight:600; color:#2d3748;'>Preview Tabel Bergaris:</p>",
+          "<p style='font-weight:600; color:#2d3748;'>Preview Tabel"
+          " Bergaris:</p>",
           unsafe_allow_html=True,
       )
       st.dataframe(styled_preview, use_container_width=True, height=450)
@@ -775,7 +1024,9 @@ elif st.session_state.page == "table":
               bottom=Side(style="thin", color="888888"),
           )
           header_fill = PatternFill(
-              start_color=bg_hex, end_color=bg_hex, fill_type="solid"
+              start_color=bg_hex.replace("#", ""),
+              end_color=bg_hex.replace("#", ""),
+              fill_type="solid",
           )
           header_font = Font(
               name="Calibri", size=11, bold=True, color="FFFFFF"
@@ -808,7 +1059,7 @@ elif st.session_state.page == "table":
           return final_output.getvalue()
 
         excel_data = create_styled_vertical_excel(
-            columns_list, cleaned_values, table_bg_color
+            columns_list, cleaned_values, module_accent
         )
         st.download_button(
             label="📊 Download Excel Bergaris",
@@ -828,21 +1079,27 @@ elif st.session_state.page == "table":
 
       with col_e3:
 
-        def create_pdf_detail(cols, vals, module_type):
+        def create_pdf_detail(cols, vals, accent_color):
           pdf = FPDF(orientation="P", unit="mm", format="A4")
           pdf.add_page()
           pdf.set_font("Arial", "B", 14)
-          if module_type == "kendaraan":
+          if accent_color == "#2b6cb0":
             pdf.set_text_color(43, 108, 176)
-          else:
+          elif accent_color == "#276749":
             pdf.set_text_color(39, 103, 73)
+          else:
+            pdf.set_text_color(155, 44, 44)
+
           pdf.cell(0, 10, "DETAIL INFORMASI ASET PEMERINTAH DAERAH", 0, 1, "C")
           pdf.ln(4)
           pdf.set_font("Arial", "B", 10)
-          if module_type == "kendaraan":
+          if accent_color == "#2b6cb0":
             pdf.set_fill_color(43, 108, 176)
-          else:
+          elif accent_color == "#276749":
             pdf.set_fill_color(39, 103, 73)
+          else:
+            pdf.set_fill_color(155, 44, 44)
+
           pdf.set_text_color(255, 255, 255)
           pdf.cell(70, 7, "Atribut / Kolom Data", 1, 0, "C", True)
           pdf.cell(120, 7, "Keterangan / Isi Data", 1, 1, "C", True)
@@ -864,7 +1121,7 @@ elif st.session_state.page == "table":
             return output_pdf.encode("latin1")
 
         pdf_bytes = create_pdf_detail(
-            columns_list, cleaned_values, st.session_state.module
+            columns_list, cleaned_values, module_accent
         )
         st.download_button(
             label="📑 Download PDF Bergaris",
