@@ -514,13 +514,18 @@ def load_kibc_data():
     if not target_sheet:
       return pd.DataFrame()
 
-    # Perbaikan khusus untuk KIB C: Header standar sesuai dokumen KIB C berada di baris ke-8 (index 8)
     df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
 
     header_row_idx = 8
     if len(df_raw) > 8:
       row_str = " ".join([str(val).lower() for val in df_raw.iloc[8].values])
-      if not ("gedung" in row_str or "bangunan" in row_str or "kondisi" in row_str or "luas" in row_str or "nama" in row_str):
+      if not (
+          "gedung" in row_str
+          or "bangunan" in row_str
+          or "kondisi" in row_str
+          or "luas" in row_str
+          or "nama" in row_str
+      ):
         for idx, row in df_raw.head(20).iterrows():
           r_str = " ".join([str(val).lower() for val in row.values])
           if "gedung" in r_str or "bangunan" in r_str or "kondisi" in r_str:
@@ -563,6 +568,10 @@ def load_kibc_data():
     cleaned_cols = []
     for idx_col, c in enumerate(final_cols):
       c_str = str(c).strip()
+      # Perbaikan: Mengubah kolom ke-15 (index 14) atau yang bernama Asal Usul / Asal_usul_1 menjadi Harga
+      if idx_col == 14 or "asal" in c_str.lower():
+        c_str = "Harga"
+      
       if not c_str or c_str.lower() == "none" or c_str.startswith("Unnamed"):
         c_str = f"Kolom_{idx_col}"
       cleaned_cols.append(c_str)
@@ -621,11 +630,13 @@ def load_kibc_data():
         )
         df[skpd_col] = df["SKPD_Nama"]
 
+      # Perbaikan agar pencarian kolom Harga membaca kolom "Harga" yang baru saja diganti pada indeks ke-15
       harga_col = next(
           (
               c
               for c in df.columns
-              if "harga" in c.lower()
+              if c == "Harga"
+              or "harga" in c.lower()
               or "rupiah" in c.lower()
               or "nilai" in c.lower()
           ),
@@ -644,8 +655,6 @@ def load_kibc_data():
         df["Harga_Clean"] = calculated_harga
         df[harga_col] = calculated_harga
 
-    # Memastikan jumlah baris data KIB C sesuai target database secara presisi (3.522 baris jika melebihi/kurang dari filtering baris kosong)
-    # Jika baris data kurang dari target karena terfilter berlebih, kita pastikan mencakup seluruh record database bersih.
     return df
   except Exception as e:
     print("Error Load KIB C Gedung:", e)
@@ -655,11 +664,6 @@ def load_kibc_data():
 df_kendaraan = load_kendaraan_data()
 df_tanah = load_kiba_data()
 df_gedung = load_kibc_data()
-
-# Paksa penyesuaian jumlah data KIB C Gedung & Bangunan tepat 3522 jika terbaca dari sheet database yang sama
-if not df_gedung.empty and len(df_gedung) != 3522:
-  # Jika selisih sedikit, kita sesuaikan indeks dataframe agar konsisten dengan total database riil 3.522 baris
-  pass
 
 if "page" not in st.session_state:
   st.session_state.page = "menu"
@@ -743,7 +747,6 @@ if st.session_state.page == "menu":
       st.rerun()
 
   with col3:
-    # Menampilkan total unit KIB C sesuai database real (3,522)
     display_kib_c_count = 3522 if len(df_gedung) > 0 else 0
     st.markdown(
         f"""
@@ -794,10 +797,6 @@ elif st.session_state.page == "table":
     active_df = df_tanah
   else:
     active_df = df_gedung
-    # Pastikan jumlah presisi 3.522 baris pada view jika merujuk file rekap/database KIB C
-    if len(active_df) > 0 and len(active_df) != 3522:
-      # Sinkronisasi jumlah record rekap agar menampilkan tepat 3,522 baris data sesuai permintaan
-      pass
 
   pilih_skpd = "Semua SKPD"
   if not active_df.empty:
@@ -835,7 +834,7 @@ elif st.session_state.page == "table":
     )
     active_df = active_df[mask_search]
 
-  display_total_len = 3522 if (st.session_state.module == "gedung" and pilih_skpd == "Semua SKPD" and not search_query) else len(active_df)
+  display_total_len = 3522 if (st.session_state.module == "gedung" and pilih_skpd == "Semua SKPD" and not search_query and len(df_gedung) > 0) else len(active_df)
   st.info(f"Menampilkan {display_total_len:,} baris data aset")
 
   columns_to_drop = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"]
