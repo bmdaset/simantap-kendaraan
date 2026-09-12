@@ -869,39 +869,99 @@ elif st.session_state.page == "table":
   st.dataframe(display_df, use_container_width=True, height=400)
 
   st.markdown("---")
+
+  # -------------------------------------------------------------
+  # REKAPITULASI DITAMBAHKAN JUMLAH NILAI (RP) DI SETIAP MODUL
+  # -------------------------------------------------------------
   if st.session_state.module == "kendaraan":
     rekap_title = (
-        f"📊 Rekapitulasi Kategori Kendaraan: {pilih_skpd}"
+        f"📊 Rekapitulasi Kategori Kendaraan & Nilai: {pilih_skpd}"
         if pilih_skpd != "Semua SKPD"
-        else "📊 Rekapitulasi Keseluruhan Kategori Kendaraan per SKPD"
+        else (
+            "📊 Rekapitulasi Keseluruhan Kategori Kendaraan & Nilai per SKPD"
+        )
     )
     st.markdown(f"#### {rekap_title}")
 
     if not active_df.empty:
-      summary_pivot = (
-          active_df.pivot_table(
-              index="SKPD_Nama",
-              columns="Kategori_Jenis",
-              values=active_df.columns[0],
-              aggfunc="count",
-              fill_value=0,
+      pivot_unit = active_df.pivot_table(
+          index="SKPD_Nama",
+          columns="Kategori_Jenis",
+          values=active_df.columns[0],
+          aggfunc="count",
+          fill_value=0,
+      )
+      pivot_nilai = active_df.pivot_table(
+          index="SKPD_Nama",
+          columns="Kategori_Jenis",
+          values="Harga_Clean",
+          aggfunc="sum",
+          fill_value=0,
+      )
+
+      # Gabungkan kolom Unit dan Nilai agar rapi
+      combined_rekap = pd.DataFrame(index=pivot_unit.index)
+      for col in pivot_unit.columns:
+        combined_rekap[f"Unit - {col}"] = pivot_unit[col]
+        combined_rekap[f"Nilai (Rp) - {col}"] = pivot_nilai[col]
+
+      combined_rekap["Total Unit"] = pivot_unit.sum(axis=1)
+      combined_rekap["Total Nilai (Rp)"] = pivot_nilai.sum(axis=1)
+      combined_rekap = combined_rekap.reset_index()
+
+      # Format angka ribuan untuk kolom nilai
+      for col in combined_rekap.columns:
+        if "Nilai" in col:
+          combined_rekap[col] = combined_rekap[col].apply(
+              lambda x: f"Rp {x:,.0f}".replace(",", ".")
+          )
+
+      st.dataframe(combined_rekap, use_container_width=True)
+
+  elif st.session_state.module == "tanah":
+    st.markdown(
+        "#### 📊 Ringkasan Jumlah Bidang Tanah & Total Nilai per SKPD"
+    )
+    if not active_df.empty and "SKPD_Nama" in active_df.columns:
+      summary_tanah = (
+          active_df.groupby("SKPD_Nama")
+          .agg(
+              Jumlah_Bidang=("SKPD_Nama", "count"),
+              Total_Nilai=("Harga_Clean", "sum"),
           )
           .reset_index()
       )
-      kat_cols = [c for c in summary_pivot.columns if c != "SKPD_Nama"]
-      summary_pivot["Total Unit"] = summary_pivot[kat_cols].sum(axis=1)
-      st.dataframe(summary_pivot, use_container_width=True)
-  elif st.session_state.module == "tanah":
-    st.markdown("#### 📊 Ringkasan Jumlah Bidang Tanah per SKPD")
-    if not active_df.empty and "SKPD_Nama" in active_df.columns:
-      summary_tanah = active_df["SKPD_Nama"].value_counts().reset_index()
-      summary_tanah.columns = ["Nama SKPD / Dinas", "Jumlah Bidang Tanah"]
+      summary_tanah.columns = [
+          "Nama SKPD / Dinas",
+          "Jumlah Bidang Tanah",
+          "Total Nilai (Rp)",
+      ]
+      summary_tanah["Total Nilai (Rp)"] = summary_tanah["Total Nilai (Rp)"].apply(
+          lambda x: f"Rp {x:,.0f}".replace(",", ".")
+      )
       st.dataframe(summary_tanah, use_container_width=True)
+
   else:
-    st.markdown("#### 📊 Ringkasan Jumlah Gedung & Bangunan per SKPD")
+    st.markdown(
+        "#### 📊 Ringkasan Jumlah Gedung & Bangunan serta Total Nilai per SKPD"
+    )
     if not active_df.empty and "SKPD_Nama" in active_df.columns:
-      summary_gedung = active_df["SKPD_Nama"].value_counts().reset_index()
-      summary_gedung.columns = ["Nama SKPD / Dinas", "Jumlah Gedung"]
+      summary_gedung = (
+          active_df.groupby("SKPD_Nama")
+          .agg(
+              Jumlah_Gedung=("SKPD_Nama", "count"),
+              Total_Nilai=("Harga_Clean", "sum"),
+          )
+          .reset_index()
+      )
+      summary_gedung.columns = [
+          "Nama SKPD / Dinas",
+          "Jumlah Gedung",
+          "Total Nilai (Rp)",
+      ]
+      summary_gedung["Total Nilai (Rp)"] = summary_gedung[
+          "Total Nilai (Rp)"
+      ].apply(lambda x: f"Rp {x:,.0f}".replace(",", "."))
       st.dataframe(summary_gedung, use_container_width=True)
 
   st.markdown("---")
