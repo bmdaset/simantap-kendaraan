@@ -697,7 +697,7 @@ elif st.session_state.page == "table":
       columns_list = list(display_df.columns)
 
       cleaned_values = []
-      for col in columns_list:
+      for idx_col, col in enumerate(columns_list):
         val = row_data[col]
         if pd.isna(val):
           cleaned_values.append("None")
@@ -710,7 +710,11 @@ elif st.session_state.page == "table":
             else:
               cleaned_values.append(str(val))
         else:
-          cleaned_values.append(str(val))
+          val_str = str(val).strip()
+          # Hilangkan 00:00:00 pada format tanggal/timestamp
+          if " 00:00:00" in val_str:
+            val_str = val_str.replace(" 00:00:00", "")
+          cleaned_values.append(val_str)
 
       detail_df = pd.DataFrame({
           "Atribut / Kolom Data": columns_list,
