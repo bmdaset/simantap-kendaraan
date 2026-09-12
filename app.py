@@ -16,6 +16,7 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Global Background Tema BMD */
     .stApp {
         background: linear-gradient(135deg, #eef2f5 0%, #e2e8f0 100%);
     }
@@ -41,6 +42,7 @@ st.markdown(
         font-size: 15px;
         color: #edf2f7;
     }
+    /* Kartu Menu Kendaraan - Nuansa Cerah & Elegan */
     .card-menu-kendaraan {
         background: linear-gradient(135deg, #2b6cb0 0%, #4299e1 100%);
         padding: 28px;
@@ -50,6 +52,7 @@ st.markdown(
         margin-bottom: 15px;
         border-left: 6px solid #bee3f8;
     }
+    /* Kartu Menu KIB A Tanah - Nuansa Hijau Tanah Cerah & Elegan */
     .card-menu-tanah {
         background: linear-gradient(135deg, #276749 0%, #38a169 100%);
         padding: 28px;
@@ -206,6 +209,29 @@ def load_kendaraan_data():
             .str.strip()
         )
         df[skpd_col] = df["SKPD_Nama"]
+
+      harga_col = next(
+          (
+              c
+              for c in df.columns
+              if "harga" in c.lower()
+              or "rupiah" in c.lower()
+              or "nilai" in c.lower()
+          ),
+          None,
+      )
+      if harga_col:
+        calculated_harga = (
+            pd.to_numeric(
+                df[harga_col]
+                .astype(str)
+                .str.replace(r"[^\d.]", "", regex=True),
+                errors="coerce",
+            ).fillna(0)
+            * 1000
+        )
+        df["Harga_Clean"] = calculated_harga
+        df[harga_col] = calculated_harga
 
       def deteksi_kategori(row):
         combined = " ".join(
@@ -395,45 +421,6 @@ def load_kiba_data():
           .str.lower()
           .str.contains("jumlah|total|n o", na=False)
       ].reset_index(drop=True)
-
-    # PERBAIKAN: Menukar posisi kolom Sertifikat dan Tanggal Sertifikat jika keduanya ada
-    col_names_lower = [str(c).lower() for c in df.columns]
-    sertif_idx = next(
-        (
-            i
-            for i, c in enumerate(col_names_lower)
-            if c == "sertifikat" or "sertifikat" in c
-        ),
-        None,
-    )
-    tgl_sertif_idx = next(
-        (
-            i
-            for i, c in enumerate(col_names_lower)
-            if "tanggal" in c and "sertifikat" in c
-        ),
-        None,
-    )
-
-    if (
-        sertif_idx is not None
-        and tgl_sertif_idx is not None
-        and sertif_idx > tgl_sertif_idx
-    ):
-      cols_list = list(df.columns)
-      cols_list[sertif_idx], cols_list[tgl_sertif_idx] = (
-          cols_list[tgl_sertif_idx],
-          cols_list[sertif_idx],
-      )
-      df = df[cols_list]
-
-    # PERBAIKAN: Menghilangkan format 00:00:00 pada kolom Tanggal Sertifikat
-    for col in df.columns:
-      if "tanggal" in str(col).lower() or "sertifikat" in str(col).lower():
-        df[col] = pd.to_datetime(df[col], errors="coerce").dt.strftime(
-            "%Y-%m-%d"
-        )
-        df[col] = df[col].fillna("None")
 
     df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
     df["Harga_Clean"] = 0.0
@@ -712,7 +699,7 @@ elif st.session_state.page == "table":
       cleaned_values = []
       for col in columns_list:
         val = row_data[col]
-        if pd.isna(val) or str(val).lower() == "nan":
+        if pd.isna(val):
           cleaned_values.append("None")
         elif isinstance(val, (int, float)):
           if "harga" in col.lower():
