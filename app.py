@@ -992,13 +992,16 @@ elif st.session_state.page == "table":
 
   selected_rows = event.selection.rows if event and event.selection else []
   if selected_rows:
-    st.session_state.selected_row_idx = display_df.index[selected_rows[0]]
+    st.session_state.selected_row_idx = selected_rows[0]
     st.session_state.page = "detail"
     st.rerun()
 
 elif st.session_state.page == "detail":
   if st.session_state.module == "kendaraan":
     active_df = df_kendaraan
+    keyword = st.session_state.keyword
+    if keyword != "":
+      active_df = active_df[active_df["Kategori_Jenis"] == keyword]
     table_bg_color = "2b6cb0"
   elif st.session_state.module == "tanah":
     active_df = df_tanah
@@ -1025,10 +1028,10 @@ elif st.session_state.page == "detail":
       unsafe_allow_html=True,
   )
 
-  selected_row_idx = st.session_state.get("selected_row_idx", 0)
+  selected_row_idx = st.session_state.get("selected_row_idx", None)
 
   if selected_row_idx is not None and selected_row_idx < len(display_df):
-    row_data = display_df.loc[selected_row_idx]
+    row_data = display_df.iloc[selected_row_idx]
     columns_list = list(display_df.columns)
 
     cleaned_values = [str(row_data[col]) for col in columns_list]
