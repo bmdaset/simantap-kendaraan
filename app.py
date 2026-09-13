@@ -1,5 +1,10 @@
 import io
-from docx import Document
+import glob
+import os
+from fpdf import FPDF
+import openpyxl
+import pandas as pd
+import streamlit as st
 
 
 def generate_excel_detail(df_detail, title_text):
@@ -7,31 +12,6 @@ def generate_excel_detail(df_detail, title_text):
   output = io.BytesIO()
   with pd.ExcelWriter(output, engine="openpyxl") as writer:
     df_detail.to_excel(writer, index=False, sheet_name="Detail Aset")
-  output.seek(0)
-  return output
-
-
-def generate_word_detail(df_detail, title_text):
-  """Membuat file Word (.docx) untuk detail aset terpilih."""
-  doc = Document()
-  doc.add_heading(f"DETAIL ASET: {title_text}", level=1)
-  doc.add_paragraph(
-      "Dokumen ini dicetak otomatis dari sistem manajemen aset SIMANTAP."
-  )
-
-  table = doc.add_table(rows=1, cols=2)
-  table.style = "Table Grid"
-  hdr_cells = table.rows[0].cells
-  hdr_cells[0].text = "Atribut / Kolom"
-  hdr_cells[1].text = "Keterangan"
-
-  for _, row in df_detail.iterrows():
-    row_cells = table.add_row().cells
-    row_cells[0].text = str(row["Atribut / Kolom Data"])
-    row_cells[1].text = str(row["Keterangan / Isi Data"])
-
-  output = io.BytesIO()
-  doc.save(output)
   output.seek(0)
   return output
 
