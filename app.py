@@ -1122,6 +1122,10 @@ elif st.session_state.page == "detail":
           " diperlukan."
       )
 
+      st.markdown("##### 📌 Rincian Barang yang Akan Dihapus:")
+      st.dataframe(detail_df, use_container_width=True, height=250)
+
+      st.markdown("<br>", unsafe_allow_html=True)
       if st.button("⚠️ Konfirmasi Hapus Permanen Barang Ini", type="primary"):
         success_del = delete_database_row(
             st.session_state.module, selected_row_idx
