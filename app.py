@@ -1,6 +1,8 @@
 from io import BytesIO
 import glob
 import os
+from docx import Document
+from docx.shared import Inches, Pt
 from fpdf import FPDF
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -106,7 +108,6 @@ def load_kendaraan_data():
   file_path = get_target_file()
   if not os.path.exists(file_path):
     return pd.DataFrame()
-
   try:
     df_raw = pd.read_excel(
         file_path, sheet_name="KENDARAAN DINAS", header=None
@@ -117,7 +118,6 @@ def load_kendaraan_data():
       if "jenis barang" in row_str or "merk" in row_str:
         header_row_idx = idx
         break
-
     h1 = (
         df_raw.iloc[header_row_idx]
         .fillna("")
@@ -302,7 +302,6 @@ def load_kiba_data():
   file_path = get_target_file()
   if not os.path.exists(file_path):
     return pd.DataFrame()
-
   try:
     xls = pd.ExcelFile(file_path)
     sheet_names = xls.sheet_names
@@ -316,7 +315,6 @@ def load_kiba_data():
         ),
         sheet_names[1] if len(sheet_names) > 1 else sheet_names[0],
     )
-
     df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
     header_row_idx = 0
     for idx, row in df_raw.head(25).iterrows():
@@ -329,7 +327,6 @@ def load_kiba_data():
       ):
         header_row_idx = idx
         break
-
     h1 = (
         df_raw.iloc[header_row_idx]
         .fillna("")
@@ -482,7 +479,6 @@ def load_kibc_data():
   file_path = get_target_file()
   if not os.path.exists(file_path):
     return pd.DataFrame()
-
   try:
     xls = pd.ExcelFile(file_path)
     sheet_names = xls.sheet_names
@@ -653,16 +649,13 @@ def load_kibc_data():
     return pd.DataFrame()
 
 
-# Fungsi helper untuk menyimpan update langsung ke file excel asli tanpa merusak baris/sheet lain
 def update_database_row(module_type, display_idx, updated_dict_values):
   file_path = get_target_file()
   if not os.path.exists(file_path):
     return False
-
   try:
     xls = pd.ExcelFile(file_path)
     sheet_names = xls.sheet_names
-
     if module_type == "kendaraan":
       target_sheet = "KENDARAAN DINAS"
       header_row_idx = 13
@@ -675,20 +668,6 @@ def update_database_row(module_type, display_idx, updated_dict_values):
           or "kiba" in s.lower()
       )
       header_row_idx = 0
-      for idx, row in (
-          pd.read_excel(file_path, sheet_name=target_sheet, header=None)
-          .head(25)
-          .iterrows()
-      ):
-        row_str = " ".join([str(val).lower() for val in row.values])
-        if (
-            "luas" in row_str
-            or "alamat" in row_str
-            or "letak" in row_str
-            or "hak" in row_str
-        ):
-          header_row_idx = idx
-          break
     else:
       target_sheet = next(
           s
@@ -699,31 +678,12 @@ def update_database_row(module_type, display_idx, updated_dict_values):
           or "kibc" in s.lower()
       )
       header_row_idx = 0
-      for idx, row in (
-          pd.read_excel(file_path, sheet_name=target_sheet, header=None)
-          .head(25)
-          .iterrows()
-      ):
-        row_str = " ".join([str(val).lower() for val in row.values])
-        if any(
-            k in row_str
-            for k in [
-                "kode barang",
-                "nama barang",
-                "jenis barang",
-                "kondisi",
-                "luas lantai",
-            ]
-        ):
-          header_row_idx = idx
-          break
 
     df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
     data_start_idx = (
         header_row_idx + 2 if module_type == "kendaraan" else header_row_idx + 1
     )
 
-    # Hitung absolute row index pada excel asli
     valid_counter = 0
     excel_target_row = -1
     for r_idx in range(data_start_idx, len(df_raw)):
@@ -733,51 +693,23 @@ def update_database_row(module_type, display_idx, updated_dict_values):
       first_val = str(row_vals.iloc[0]).lower()
       if "jumlah" in first_val or "total" in first_val or "n o" in first_val:
         continue
-
       if valid_counter == display_idx:
         excel_target_row = r_idx
         break
       valid_counter += 1
 
     if excel_target_row != -1:
-      for col_name, new_val in updated_dict_values.items():
-        # Cari kolom asli di df_raw
-        # Untuk simplicity, kita mapping berdasarkan indeks kolom string di display dataframe
-        pass
+      wb = openpyxl.load_workbook(file_path)
+      ws = wb[target_sheet]
+      target_ws_row = excel_target_row + 1
 
-    # Alternatif aman: Baca ulang mapping kolom lalu tulis kembali nilainya
-    wb = openpyxl.load_workbook(file_path)
-    ws = wb[target_sheet]
-
-    # Kita tentukan pemetaan kolom display ke kolom excel asli berdasarkan header
-    # Mari kita lakukan iterasi header excel untuk mencocokkan nama kolom display
-    header_cells = [
-        str(cell.value).strip()
-        for cell in ws[
-            data_start_idx
-            if module_type != "kendaraan"
-            else header_row_idx + 1
-        ]
-    ]
-
-    # Lakukan update langsung ke cell openpyxl pada baris excel_target_row + 1 (karena 1-indexed)
-    target_ws_row = excel_target_row + 1
-    for col_name, val in updated_dict_values.items():
-      # Cari kolom excel yang cocok
-      for col_idx_1based, cell in enumerate(
-          ws[target_ws_row], start=1
-      ):
-        # Cocokkan dengan header jika memungkinkan, atau update berdasarkan urutan kolom bersih
-        pass
-
-    # Cara paling aman universal tanpa merusak struktur: Simpan melalui pandas via openpyxl writer
-    with pd.ExcelWriter(
-        file_path, engine="openpyxl", mode="a", if_sheet_exists="replace"
-    ) as writer:
-      # Kita load seluruh sheet ke dataframe openpyxl, ubah barisnya, lalu write back
-      pass
-
-    return True
+      # Cocokkan dan tulis berdasarkan urutan kolom bersih
+      for col_idx, (col_name, val) in enumerate(updated_dict_values.items(), start=1):
+        # Update cell openpyxl sesuai posisi kolom bersih
+        ws.cell(row=target_ws_row, column=col_idx, value=val)
+      wb.save(file_path)
+      return True
+    return False
   except Exception as e:
     print("Error update database:", e)
     return False
@@ -825,22 +757,12 @@ def delete_database_row(module_type, display_idx):
       first_val = str(row_vals.iloc[0]).lower()
       if "jumlah" in first_val or "total" in first_val or "n o" in first_val:
         continue
-
       if valid_counter == display_idx:
         excel_target_row = r_idx
         break
       valid_counter += 1
 
     if excel_target_row != -1:
-      # Drop baris dari df_raw dan simpan kembali ke sheet tersebut tanpa merusak sheet lain
-      df_raw = df_raw.drop(index=excel_target_row).reset_index(drop=True)
-
-      with pd.ExcelWriter(
-          file_path, engine="openpyxl", mode="w"
-      ) as writer:  # Atau mode append sheet
-        pass
-
-      # Untuk keamanan workbook multi-sheet, gunakan openpyxl langsung untuk delete row
       wb = openpyxl.load_workbook(file_path)
       ws = wb[target_sheet]
       ws.delete_rows(excel_target_row + 1)
@@ -1052,8 +974,8 @@ elif st.session_state.page == "table":
 
   st.markdown(
       "<p style='font-weight:600; color:#2d3748;'>💡 <i>Klik pada baris data"
-      " barang di bawah untuk melihat preview detail lengkap, melakukan edit"
-      " keterangan, atau menghapus data.</i></p>",
+      " barang di bawah untuk membuka menu Preview Detail, Download Dokumen,"
+      " Edit Data, atau Hapus Data.</i></p>",
       unsafe_allow_html=True,
   )
 
@@ -1095,8 +1017,8 @@ elif st.session_state.page == "detail":
       st.rerun()
 
   st.markdown(
-      f"<h3 style='color:#{table_bg_color}; font-weight:700;'>📋 Form Edit &"
-      " Preview Detail Aset Terpilih</h3>",
+      f"<h3 style='color:#{table_bg_color}; font-weight:700;'>📋 Preview &"
+      " Pengelolaan Aset Terpilih</h3>",
       unsafe_allow_html=True,
   )
 
@@ -1106,80 +1028,195 @@ elif st.session_state.page == "detail":
     row_data = display_df.loc[selected_row_idx]
     columns_list = list(display_df.columns)
 
-    # Form Edit Interaktif untuk memperbarui informasi/keterangan barang langsung ke database
-    st.markdown(
-        "#### ✏️ Perbarui Keterangan / Informasi Barang (Simpan ke Database)"
-    )
-    with st.form("form_edit_barang"):
-      updated_values = {}
-      cols_form = st.columns(2)
-      for i, col in enumerate(columns_list):
-        current_val = (
-            str(row_data[col])
-            if pd.notna(row_data[col]) and str(row_data[col]) != "None"
-            else ""
-        )
-        with cols_form[i % 2]:
-          updated_values[col] = st.text_input(
-              label=str(col), value=current_val, key=f"input_edit_{col}"
-          )
-
-      col_btn_save, col_btn_del = st.columns(2)
-      submitted_edit = col_btn_save.form_submit_button(
-          "💾 Simpan Perubahan ke Database"
-      )
-      clicked_delete = col_btn_del.form_submit_button(
-          "🗑️ Hapus Barang Ini dari Database"
-      )
-
-      if submitted_edit:
-        # Proses update langsung ke file excel database
-        success = update_database_row(
-            st.session_state.module, selected_row_idx, updated_values
-        )
-        if success:
-          st.success(
-              "Data berhasil diperbarui dan disimpan permanen ke database"
-              " Excel!"
-          )
-          st.cache_data.clear()
-          st.rerun()
-        else:
-          st.error("Gagal menyimpan perubahan ke database.")
-
-      if clicked_delete:
-        success_del = delete_database_row(
-            st.session_state.module, selected_row_idx
-        )
-        if success_del:
-          st.success("Barang berhasil dihapus dari database!")
-          st.session_state.page = "table"
-          st.cache_data.clear()
-          st.rerun()
-        else:
-          st.error("Gagal menghapus barang dari database.")
-
-    st.markdown("---")
-    st.markdown(
-        "<h4 style='font-weight:600; color:#2d3748;'>📥 Unduh Dokumen"
-        " Detail</h4>",
-        unsafe_allow_html=True,
-    )
-
     cleaned_values = [str(row_data[col]) for col in columns_list]
     detail_df = pd.DataFrame({
         "Atribut / Kolom Data": columns_list,
         "Keterangan / Isi Data": cleaned_values,
     })
 
-    col_e1, col_e2, col_e3 = st.columns(3)
-    with col_e1:
-      csv_data = detail_df.to_csv(index=False).encode("utf-8")
-      st.download_button(
-          label="📄 Download CSV Detail",
-          data=csv_data,
-          file_name=f"Detail_Aset_{selected_row_idx+1}.csv",
-          mime="text/csv",
+    # Menggunakan Tab untuk memisahkan Menu Preview & Download dengan Menu Edit & Hapus Data
+    tab_preview, tab_edit, tab_hapus = st.tabs([
+        "👁️ Preview Detail & Download",
+        "✏️ Edit Data Aset",
+        "🗑️ Hapus Aset",
+    ])
+
+    with tab_preview:
+      st.markdown("#### 📄 Rincian Detail Data Aset Terpilih")
+      st.dataframe(detail_df, use_container_width=True, height=350)
+
+      st.markdown("---")
+      st.markdown(
+          "<h5 style='font-weight:600; color:#2d3748;'>📥 Unduh Dokumen Detail"
+          " Aset</h5>",
+          unsafe_allow_html=True,
       )
+
+      col_e1, col_e2, col_e3 = st.columns(3)
+
+      # 1. Download Excel (.xlsx)
+      with col_e1:
+        output_excel = BytesIO()
+        with pd.ExcelWriter(output_excel, engine="openpyxl") as writer:
+          detail_df.to_excel(writer, index=False, sheet_name="Detail_Aset")
+        excel_bytes = output_excel.getvalue()
+        st.download_button(
+            label="📊 Download Excel (.xlsx)",
+            data=excel_bytes,
+            file_name=f"Detail_Aset_{selected_row_idx+1}.xlsx",
+            mime=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+      # 2. Download Word (.docx)
+      with col_e2:
+        doc = Document()
+        doc.add_heading("Detail Aset Pemerintah Daerah", level=1)
+        doc.add_paragraph(
+            f"Modul: {st.session_state.module.upper()} | Indeks Data:"
+            f" {selected_row_idx+1}"
+        )
+        table = doc.add_table(rows=1, cols=2)
+        hdr_cells = table.rows[0].cells
+        hdr_cells[0].text = "Atribut / Kolom Data"
+        hdr_cells[1].text = "Keterangan / Isi Data"
+        for _, r in detail_df.iterrows():
+          row_cells = table.add_row().cells
+          row_cells[0].text = str(r["Atribut / Kolom Data"])
+          row_cells[1].text = str(r["Keterangan / Isi Data"])
+
+        output_word = BytesIO()
+        doc.save(output_word)
+        word_bytes = output_word.getvalue()
+        st.download_button(
+            label="📝 Download Word (.docx)",
+            data=word_bytes,
+            file_name=f"Detail_Aset_{selected_row_idx+1}.docx",
+            mime=(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+        )
+
+      # 3. Download PDF
+      with col_e3:
+        class PDF(FPDF):
+
+          def header(self):
+            self.set_font("Arial", "B", 12)
+            self.cell(
+                0,
+                10,
+                "DETAIL ASET PEMERINTAH DAERAH (SIMANTAP)",
+                0,
+                1,
+                "C",
+            )
+            self.ln(5)
+
+          def footer(self):
+            self.set_y(-15)
+            self.set_font("Arial", "I", 8)
+            self.cell(
+                0,
+                10,
+                f"Halaman {self.page_no()}",
+                0,
+                0,
+                "C",
+            )
+
+        pdf = PDF()
+        pdf.add_page()
+        pdf.set_font("Arial", "", 9)
+        for _, r in detail_df.iterrows():
+          attr_text = str(r["Atribut / Kolom Data"])
+          val_text = str(r["Keterangan / Isi Data"])
+          pdf.cell(
+              70,
+              7,
+              attr_text.encode("latin-1", "replace").decode("latin-1"),
+              1,
+          )
+          pdf.cell(
+              110,
+              7,
+              val_text.encode("latin-1", "replace").decode("latin-1"),
+              1,
+              1,
+          )
+
+        pdf_bytes = pdf.output(dest="S").encode("latin1")
+        st.download_button(
+            label="📑 Download PDF (.pdf)",
+            data=pdf_bytes,
+            file_name=f"Detail_Aset_{selected_row_idx+1}.pdf",
+            mime="application/pdf",
+        )
+
+    with tab_edit:
+      st.markdown(
+          "#### ✏️ Form Pembaruan Data Aset Terpilih (Simpan ke Database)"
+      )
+      with st.form("form_edit_barang"):
+        updated_values = {}
+        cols_form = st.columns(2)
+        for i, col in enumerate(columns_list):
+          current_val = (
+              str(row_data[col])
+              if pd.notna(row_data[col]) and str(row_data[col]) != "None"
+              else ""
+          )
+          with cols_form[i % 2]:
+            updated_values[col] = st.text_input(
+                label=str(col), value=current_val, key=f"input_edit_{col}"
+            )
+
+        submitted_edit = st.form_submit_button(
+            "💾 Simpan Perubahan ke Database Excel"
+        )
+        if submitted_edit:
+          success = update_database_row(
+              st.session_state.module, selected_row_idx, updated_values
+          )
+          if success:
+            st.success(
+                "Data berhasil diperbarui dan disimpan permanen ke database"
+                " Excel!"
+            )
+            st.cache_data.clear()
+            st.rerun()
+          else:
+            st.error("Gagal menyimpan perubahan ke database.")
+
+    with tab_hapus:
+      st.markdown("#### 🗑️ Hapus Data Aset dari Database")
+      st.warning(
+          "Tindakan ini akan menghapus data aset terpilih secara permanen dari"
+          " file Excel database."
+      )
+      with st.form("form_hapus_barang"):
+        confirm_del = st.checkbox(
+            "Saya yakin ingin menghapus data aset ini secara permanen"
+        )
+        clicked_delete = st.form_submit_button("🗑️ Konfirmasi Hapus Barang Ini")
+
+        if clicked_delete:
+          if confirm_del:
+            success_del = delete_database_row(
+                st.session_state.module, selected_row_idx
+            )
+            if success_del:
+              st.success("Barang berhasil dihapus dari database!")
+              st.session_state.page = "table"
+              st.cache_data.clear()
+              st.rerun()
+            else:
+              st.error("Gagal menghapus barang dari database.")
+          else:
+            st.error(
+                "Harap centang kotak konfirmasi di atas untuk melanjutkan"
+                " penghapusan."
+            )
   else:
     st.warning("Data item aset tidak ditemukan.")
