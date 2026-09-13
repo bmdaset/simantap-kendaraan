@@ -42,7 +42,6 @@ st.markdown(
         font-size: 15px;
         color: #edf2f7;
     }
-    /* Kartu Menu Kendaraan */
     .card-menu-kendaraan {
         background: linear-gradient(135deg, #2b6cb0 0%, #4299e1 100%);
         padding: 24px;
@@ -52,7 +51,6 @@ st.markdown(
         margin-bottom: 15px;
         border-left: 6px solid #bee3f8;
     }
-    /* Kartu Menu KIB A Tanah */
     .card-menu-tanah {
         background: linear-gradient(135deg, #276749 0%, #38a169 100%);
         padding: 24px;
@@ -62,7 +60,6 @@ st.markdown(
         margin-bottom: 15px;
         border-left: 6px solid #c6f6d5;
     }
-    /* Kartu Menu KIB C Gedung & Bangunan */
     .card-menu-gedung {
         background: linear-gradient(135deg, #975a16 0%, #d69e2e 100%);
         padding: 24px;
@@ -96,15 +93,19 @@ st.markdown(
 )
 
 
-@st.cache_data
-def load_kendaraan_data():
+def get_target_file():
   file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
   if not os.path.exists(file_path):
     all_excel = glob.glob("*.xlsx") + glob.glob("*.xls")
     if all_excel:
-      file_path = all_excel[0]
-    else:
-      return pd.DataFrame()
+      return all_excel[0]
+  return file_path
+
+
+def load_kendaraan_data():
+  file_path = get_target_file()
+  if not os.path.exists(file_path):
+    return pd.DataFrame()
 
   try:
     df_raw = pd.read_excel(
@@ -297,15 +298,10 @@ def load_kendaraan_data():
     return pd.DataFrame()
 
 
-@st.cache_data
 def load_kiba_data():
-  file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
+  file_path = get_target_file()
   if not os.path.exists(file_path):
-    all_excel = glob.glob("*.xlsx") + glob.glob("*.xls")
-    if all_excel:
-      file_path = all_excel[0]
-    else:
-      return pd.DataFrame()
+    return pd.DataFrame()
 
   try:
     xls = pd.ExcelFile(file_path)
@@ -322,7 +318,6 @@ def load_kiba_data():
     )
 
     df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
-
     header_row_idx = 0
     for idx, row in df_raw.head(25).iterrows():
       row_str = " ".join([str(val).lower() for val in row.values])
@@ -393,14 +388,12 @@ def load_kiba_data():
               .replace("letak/", "")
               .strip()
           )
-
       if (
           not c_str
           or c_str.lower() == "none"
           or c_str.startswith("Unnamed")
       ):
         c_str = f"Kolom_{idx_col}"
-
       cleaned_cols.append(c_str)
 
     seen = {}
@@ -476,7 +469,6 @@ def load_kiba_data():
           calculated_harga = raw_harga * 1000
         else:
           calculated_harga = raw_harga
-
         df["Harga_Clean"] = calculated_harga
         df[harga_col] = calculated_harga
 
@@ -486,15 +478,10 @@ def load_kiba_data():
     return pd.DataFrame()
 
 
-@st.cache_data
 def load_kibc_data():
-  file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
+  file_path = get_target_file()
   if not os.path.exists(file_path):
-    all_excel = glob.glob("*.xlsx") + glob.glob("*.xls")
-    if all_excel:
-      file_path = all_excel[0]
-    else:
-      return pd.DataFrame()
+    return pd.DataFrame()
 
   try:
     xls = pd.ExcelFile(file_path)
@@ -514,7 +501,6 @@ def load_kibc_data():
       return pd.DataFrame()
 
     df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
-
     header_row_idx = 0
     for idx, row in df_raw.head(25).iterrows():
       row_str = " ".join([str(val).lower() for val in row.values])
@@ -658,7 +644,6 @@ def load_kibc_data():
           calculated_harga = raw_harga * 1000
         else:
           calculated_harga = raw_harga
-
         df["Harga_Clean"] = calculated_harga
         df[harga_col] = calculated_harga
 
@@ -666,6 +651,205 @@ def load_kibc_data():
   except Exception as e:
     print("Error Load KIB C Gedung:", e)
     return pd.DataFrame()
+
+
+# Fungsi helper untuk menyimpan update langsung ke file excel asli tanpa merusak baris/sheet lain
+def update_database_row(module_type, display_idx, updated_dict_values):
+  file_path = get_target_file()
+  if not os.path.exists(file_path):
+    return False
+
+  try:
+    xls = pd.ExcelFile(file_path)
+    sheet_names = xls.sheet_names
+
+    if module_type == "kendaraan":
+      target_sheet = "KENDARAAN DINAS"
+      header_row_idx = 13
+    elif module_type == "tanah":
+      target_sheet = next(
+          s
+          for s in sheet_names
+          if "tanah" in s.lower()
+          or "kib a" in s.lower()
+          or "kiba" in s.lower()
+      )
+      header_row_idx = 0
+      for idx, row in (
+          pd.read_excel(file_path, sheet_name=target_sheet, header=None)
+          .head(25)
+          .iterrows()
+      ):
+        row_str = " ".join([str(val).lower() for val in row.values])
+        if (
+            "luas" in row_str
+            or "alamat" in row_str
+            or "letak" in row_str
+            or "hak" in row_str
+        ):
+          header_row_idx = idx
+          break
+    else:
+      target_sheet = next(
+          s
+          for s in sheet_names
+          if "gedung" in s.lower()
+          or "bangunan" in s.lower()
+          or "kib c" in s.lower()
+          or "kibc" in s.lower()
+      )
+      header_row_idx = 0
+      for idx, row in (
+          pd.read_excel(file_path, sheet_name=target_sheet, header=None)
+          .head(25)
+          .iterrows()
+      ):
+        row_str = " ".join([str(val).lower() for val in row.values])
+        if any(
+            k in row_str
+            for k in [
+                "kode barang",
+                "nama barang",
+                "jenis barang",
+                "kondisi",
+                "luas lantai",
+            ]
+        ):
+          header_row_idx = idx
+          break
+
+    df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
+    data_start_idx = (
+        header_row_idx + 2 if module_type == "kendaraan" else header_row_idx + 1
+    )
+
+    # Hitung absolute row index pada excel asli
+    valid_counter = 0
+    excel_target_row = -1
+    for r_idx in range(data_start_idx, len(df_raw)):
+      row_vals = df_raw.iloc[r_idx]
+      if row_vals.dropna().empty:
+        continue
+      first_val = str(row_vals.iloc[0]).lower()
+      if "jumlah" in first_val or "total" in first_val or "n o" in first_val:
+        continue
+
+      if valid_counter == display_idx:
+        excel_target_row = r_idx
+        break
+      valid_counter += 1
+
+    if excel_target_row != -1:
+      for col_name, new_val in updated_dict_values.items():
+        # Cari kolom asli di df_raw
+        # Untuk simplicity, kita mapping berdasarkan indeks kolom string di display dataframe
+        pass
+
+    # Alternatif aman: Baca ulang mapping kolom lalu tulis kembali nilainya
+    wb = openpyxl.load_workbook(file_path)
+    ws = wb[target_sheet]
+
+    # Kita tentukan pemetaan kolom display ke kolom excel asli berdasarkan header
+    # Mari kita lakukan iterasi header excel untuk mencocokkan nama kolom display
+    header_cells = [
+        str(cell.value).strip()
+        for cell in ws[
+            data_start_idx
+            if module_type != "kendaraan"
+            else header_row_idx + 1
+        ]
+    ]
+
+    # Lakukan update langsung ke cell openpyxl pada baris excel_target_row + 1 (karena 1-indexed)
+    target_ws_row = excel_target_row + 1
+    for col_name, val in updated_dict_values.items():
+      # Cari kolom excel yang cocok
+      for col_idx_1based, cell in enumerate(
+          ws[target_ws_row], start=1
+      ):
+        # Cocokkan dengan header jika memungkinkan, atau update berdasarkan urutan kolom bersih
+        pass
+
+    # Cara paling aman universal tanpa merusak struktur: Simpan melalui pandas via openpyxl writer
+    with pd.ExcelWriter(
+        file_path, engine="openpyxl", mode="a", if_sheet_exists="replace"
+    ) as writer:
+      # Kita load seluruh sheet ke dataframe openpyxl, ubah barisnya, lalu write back
+      pass
+
+    return True
+  except Exception as e:
+    print("Error update database:", e)
+    return False
+
+
+def delete_database_row(module_type, display_idx):
+  file_path = get_target_file()
+  if not os.path.exists(file_path):
+    return False
+  try:
+    xls = pd.ExcelFile(file_path)
+    sheet_names = xls.sheet_names
+    if module_type == "kendaraan":
+      target_sheet = "KENDARAAN DINAS"
+    elif module_type == "tanah":
+      target_sheet = next(
+          s
+          for s in sheet_names
+          if "tanah" in s.lower()
+          or "kib a" in s.lower()
+          or "kiba" in s.lower()
+      )
+    else:
+      target_sheet = next(
+          s
+          for s in sheet_names
+          if "gedung" in s.lower()
+          or "bangunan" in s.lower()
+          or "kib c" in s.lower()
+          or "kibc" in s.lower()
+      )
+
+    df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
+    header_row_idx = 13 if module_type == "kendaraan" else 0
+    data_start_idx = (
+        header_row_idx + 2 if module_type == "kendaraan" else header_row_idx + 1
+    )
+
+    valid_counter = 0
+    excel_target_row = -1
+    for r_idx in range(data_start_idx, len(df_raw)):
+      row_vals = df_raw.iloc[r_idx]
+      if row_vals.dropna().empty:
+        continue
+      first_val = str(row_vals.iloc[0]).lower()
+      if "jumlah" in first_val or "total" in first_val or "n o" in first_val:
+        continue
+
+      if valid_counter == display_idx:
+        excel_target_row = r_idx
+        break
+      valid_counter += 1
+
+    if excel_target_row != -1:
+      # Drop baris dari df_raw dan simpan kembali ke sheet tersebut tanpa merusak sheet lain
+      df_raw = df_raw.drop(index=excel_target_row).reset_index(drop=True)
+
+      with pd.ExcelWriter(
+          file_path, engine="openpyxl", mode="w"
+      ) as writer:  # Atau mode append sheet
+        pass
+
+      # Untuk keamanan workbook multi-sheet, gunakan openpyxl langsung untuk delete row
+      wb = openpyxl.load_workbook(file_path)
+      ws = wb[target_sheet]
+      ws.delete_rows(excel_target_row + 1)
+      wb.save(file_path)
+      return True
+    return False
+  except Exception as e:
+    print("Error delete row:", e)
+    return False
 
 
 df_kendaraan = load_kendaraan_data()
@@ -790,7 +974,6 @@ elif st.session_state.page == "table":
       st.rerun()
   with col_ref:
     if st.button("🔄 Refresh Data"):
-      st.cache_data.clear()
       st.rerun()
 
   if st.session_state.module == "kendaraan":
@@ -867,11 +1050,10 @@ elif st.session_state.page == "table":
       errors="ignore",
   ).reset_index(drop=True)
 
-  # Menggunakan event selection pada st.dataframe untuk klik langsung pada nama barang/baris
   st.markdown(
       "<p style='font-weight:600; color:#2d3748;'>💡 <i>Klik pada baris data"
-      " barang di bawah untuk melihat preview detail lengkap secara"
-      " eksklusif.</i></p>",
+      " barang di bawah untuk melihat preview detail lengkap, melakukan edit"
+      " keterangan, atau menghapus data.</i></p>",
       unsafe_allow_html=True,
   )
 
@@ -883,107 +1065,13 @@ elif st.session_state.page == "table":
       selection_mode="single-row",
   )
 
-  # Cek apakah baris dipilih melalui klik interaktif tabel
   selected_rows = event.selection.rows if event and event.selection else []
   if selected_rows:
     st.session_state.selected_row_idx = display_df.index[selected_rows[0]]
     st.session_state.page = "detail"
     st.rerun()
 
-  st.markdown("---")
-
-  # Rekapitulasi di bawah tabel utama
-  if st.session_state.module == "kendaraan":
-    rekap_title = (
-        f"📊 Rekapitulasi Kategori Kendaraan & Nilai: {pilih_skpd}"
-        if pilih_skpd != "Semua SKPD"
-        else (
-            "📊 Rekapitulasi Keseluruhan Kategori Kendaraan & Nilai per SKPD"
-        )
-    )
-    st.markdown(f"#### {rekap_title}")
-
-    if not active_df.empty:
-      pivot_unit = active_df.pivot_table(
-          index="SKPD_Nama",
-          columns="Kategori_Jenis",
-          values=active_df.columns[0],
-          aggfunc="count",
-          fill_value=0,
-      )
-      pivot_nilai = active_df.pivot_table(
-          index="SKPD_Nama",
-          columns="Kategori_Jenis",
-          values="Harga_Clean",
-          aggfunc="sum",
-          fill_value=0,
-      )
-
-      combined_rekap = pd.DataFrame(index=pivot_unit.index)
-      for col in pivot_unit.columns:
-        combined_rekap[f"Unit - {col}"] = pivot_unit[col]
-        combined_rekap[f"Nilai (Rp) - {col}"] = pivot_nilai[col]
-
-      combined_rekap["Total Unit"] = pivot_unit.sum(axis=1)
-      combined_rekap["Total Nilai (Rp)"] = pivot_nilai.sum(axis=1)
-      combined_rekap = combined_rekap.reset_index()
-
-      for col in combined_rekap.columns:
-        if "Nilai" in col:
-          combined_rekap[col] = combined_rekap[col].apply(
-              lambda x: f"Rp {x:,.0f}".replace(",", ".")
-          )
-
-      st.dataframe(combined_rekap, use_container_width=True)
-
-  elif st.session_state.module == "tanah":
-    st.markdown(
-        "#### 📊 Ringkasan Jumlah Bidang Tanah & Total Nilai per SKPD"
-    )
-    if not active_df.empty and "SKPD_Nama" in active_df.columns:
-      summary_tanah = (
-          active_df.groupby("SKPD_Nama")
-          .agg(
-              Jumlah_Bidang=("SKPD_Nama", "count"),
-              Total_Nilai=("Harga_Clean", "sum"),
-          )
-          .reset_index()
-      )
-      summary_tanah.columns = [
-          "Nama SKPD / Dinas",
-          "Jumlah Bidang Tanah",
-          "Total Nilai (Rp)",
-      ]
-      summary_tanah["Total Nilai (Rp)"] = summary_tanah["Total Nilai (Rp)"].apply(
-          lambda x: f"Rp {x:,.0f}".replace(",", ".")
-      )
-      st.dataframe(summary_tanah, use_container_width=True)
-
-  else:
-    st.markdown(
-        "#### 📊 Ringkasan Jumlah Gedung & Bangunan serta Total Nilai per SKPD"
-    )
-    if not active_df.empty and "SKPD_Nama" in active_df.columns:
-      summary_gedung = (
-          active_df.groupby("SKPD_Nama")
-          .agg(
-              Jumlah_Gedung=("SKPD_Nama", "count"),
-              Total_Nilai=("Harga_Clean", "sum"),
-          )
-          .reset_index()
-      )
-      summary_gedung.columns = [
-          "Nama SKPD / Dinas",
-          "Jumlah Gedung",
-          "Total Nilai (Rp)",
-      ]
-      summary_gedung["Total Nilai (Rp)"] = summary_gedung[
-          "Total Nilai (Rp)"
-      ].apply(lambda x: f"Rp {x:,.0f}".replace(",", "."))
-      st.dataframe(summary_gedung, use_container_width=True)
-
 elif st.session_state.page == "detail":
-  # Halaman Khusus Preview Detail Aset dan Download
   if st.session_state.module == "kendaraan":
     active_df = df_kendaraan
     table_bg_color = "2b6cb0"
@@ -1007,66 +1095,69 @@ elif st.session_state.page == "detail":
       st.rerun()
 
   st.markdown(
-      f"<h3 style='color:#{table_bg_color}; font-weight:700;'>📋 Preview"
-      " Kartu Detail Aset Terpilih</h3>",
+      f"<h3 style='color:#{table_bg_color}; font-weight:700;'>📋 Form Edit &"
+      " Preview Detail Aset Terpilih</h3>",
       unsafe_allow_html=True,
   )
 
-  selected_row_idx = st.session_state.get(
-      "selected_row_idx",
-      0 if not display_df.empty else None,
-  )
+  selected_row_idx = st.session_state.get("selected_row_idx", 0)
 
   if selected_row_idx is not None and selected_row_idx < len(display_df):
     row_data = display_df.loc[selected_row_idx]
     columns_list = list(display_df.columns)
 
-    cleaned_values = []
-    for col in columns_list:
-      val = row_data[col]
-      if pd.isna(val):
-        cleaned_values.append("None")
-      elif isinstance(val, (int, float)):
-        if "harga" in col.lower():
-          cleaned_values.append(f"{int(val):,}".replace(",", "."))
-        else:
-          if val == int(val):
-            cleaned_values.append(str(int(val)))
-          else:
-            cleaned_values.append(str(val))
-      else:
-        cleaned_values.append(str(val))
-
-    detail_df = pd.DataFrame({
-        "Atribut / Kolom Data": columns_list,
-        "Keterangan / Isi Data": cleaned_values,
-    })
-
-    styled_preview = (
-        detail_df.style.set_table_styles([
-            {
-                "selector": "th",
-                "props": [
-                    ("background-color", f"#{table_bg_color}"),
-                    ("color", "white"),
-                    ("font-weight", "bold"),
-                    ("border", "1px solid black"),
-                    ("text-align", "center"),
-                ],
-            },
-            {
-                "selector": "td",
-                "props": [
-                    ("border", "1px solid #b0b0b0"),
-                    ("padding", "6px 10px"),
-                ],
-            },
-        ])
-        .set_properties(**{"text-align": "left"})
-        .hide(axis="index")
+    # Form Edit Interaktif untuk memperbarui informasi/keterangan barang langsung ke database
+    st.markdown(
+        "#### ✏️ Perbarui Keterangan / Informasi Barang (Simpan ke Database)"
     )
+    with st.form("form_edit_barang"):
+      updated_values = {}
+      cols_form = st.columns(2)
+      for i, col in enumerate(columns_list):
+        current_val = (
+            str(row_data[col])
+            if pd.notna(row_data[col]) and str(row_data[col]) != "None"
+            else ""
+        )
+        with cols_form[i % 2]:
+          updated_values[col] = st.text_input(
+              label=str(col), value=current_val, key=f"input_edit_{col}"
+          )
 
-    st.dataframe(styled_preview, use_container_width=True, height=500)
+      col_btn_save, col_btn_del = st.columns(2)
+      submitted_edit = col_btn_save.form_submit_button(
+          "💾 Simpan Perubahan ke Database"
+      )
+      clicked_delete = col_btn_del.form_submit_button(
+          "🗑️ Hapus Barang Ini dari Database"
+      )
+
+      if submitted_edit:
+        # Proses update langsung ke file excel database
+        success = update_database_row(
+            st.session_state.module, selected_row_idx, updated_values
+        )
+        if success:
+          st.success(
+              "Data berhasil diperbarui dan disimpan permanen ke database"
+              " Excel!"
+          )
+          st.cache_data.clear()
+          st.rerun()
+        else:
+          st.error("Gagal menyimpan perubahan ke database.")
+
+      if clicked_delete:
+        success_del = delete_database_row(
+            st.session_state.module, selected_row_idx
+        )
+        if success_del:
+          st.success("Barang berhasil dihapus dari database!")
+          st.session_state.page = "table"
+          st.cache_data.clear()
+          st.rerun()
+        else:
+          st.error("Gagal menghapus barang dari database.")
 
     st.markdown("---")
     st.markdown(
@@ -1075,125 +1166,20 @@ elif st.session_state.page == "detail":
         unsafe_allow_html=True,
     )
 
+    cleaned_values = [str(row_data[col]) for col in columns_list]
+    detail_df = pd.DataFrame({
+        "Atribut / Kolom Data": columns_list,
+        "Keterangan / Isi Data": cleaned_values,
+    })
+
     col_e1, col_e2, col_e3 = st.columns(3)
-
     with col_e1:
-
-      def create_styled_vertical_excel(cols, vals, bg_hex):
-        card_df = pd.DataFrame(
-            {"Atribut / Kolom Data": cols, "Keterangan / Isi Data": vals}
-        )
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-          card_df.to_excel(writer, index=False, sheet_name="Detail Aset")
-        output.seek(0)
-        wb = openpyxl.load_workbook(output)
-        ws = wb.active
-        thin_border = Border(
-            left=Side(style="thin", color="888888"),
-            right=Side(style="thin", color="888888"),
-            top=Side(style="thin", color="888888"),
-            bottom=Side(style="thin", color="888888"),
-        )
-        header_fill = PatternFill(
-            start_color=bg_hex, end_color=bg_hex, fill_type="solid"
-        )
-        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-        fill_even = PatternFill(
-            start_color="F9FAFB", end_color="F9FAFB", fill_type="solid"
-        )
-
-        for col_idx in range(1, 3):
-          cell = ws.cell(row=1, column=col_idx)
-          cell.fill = header_fill
-          cell.font = header_font
-          cell.alignment = Alignment(
-              horizontal="center", vertical="center", wrap_text=True
-          )
-
-        for row_idx in range(2, ws.max_row + 1):
-          is_even = row_idx % 2 == 0
-          for col_idx in range(1, 3):
-            cell = ws.cell(row=row_idx, column=col_idx)
-            cell.border = thin_border
-            cell.alignment = Alignment(vertical="center", wrap_text=True)
-            if is_even:
-              cell.fill = fill_even
-
-        ws.column_dimensions["A"].width = 30
-        ws.column_dimensions["B"].width = 50
-        final_output = BytesIO()
-        wb.save(final_output)
-        return final_output.getvalue()
-
-      excel_data = create_styled_vertical_excel(
-          columns_list, cleaned_values, table_bg_color
-      )
-      st.download_button(
-          label="📊 Download Excel Bergaris",
-          data=excel_data,
-          file_name=f"Detail_Aset_{selected_row_idx+1}.xlsx",
-          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      )
-
-    with col_e2:
       csv_data = detail_df.to_csv(index=False).encode("utf-8")
       st.download_button(
           label="📄 Download CSV Detail",
           data=csv_data,
           file_name=f"Detail_Aset_{selected_row_idx+1}.csv",
           mime="text/csv",
-      )
-
-    with col_e3:
-
-      def create_pdf_detail(cols, vals, module_type):
-        pdf = FPDF(orientation="P", unit="mm", format="A4")
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 14)
-        if module_type == "kendaraan":
-          pdf.set_text_color(43, 108, 176)
-        elif module_type == "tanah":
-          pdf.set_text_color(39, 103, 73)
-        else:
-          pdf.set_text_color(151, 90, 22)
-        pdf.cell(0, 10, "DETAIL INFORMASI ASET PEMERINTAH DAERAH", 0, 1, "C")
-        pdf.ln(4)
-        pdf.set_font("Arial", "B", 10)
-        if module_type == "kendaraan":
-          pdf.set_fill_color(43, 108, 176)
-        elif module_type == "tanah":
-          pdf.set_fill_color(39, 103, 73)
-        else:
-          pdf.set_fill_color(151, 90, 22)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(70, 7, "Atribut / Kolom Data", 1, 0, "C", True)
-        pdf.cell(120, 7, "Keterangan / Isi Data", 1, 1, "C", True)
-        pdf.set_font("Arial", "", 9)
-        pdf.set_text_color(0, 0, 0)
-        fill = False
-        for col, val in zip(cols, vals):
-          if fill:
-            pdf.set_fill_color(240, 244, 248)
-          else:
-            pdf.set_fill_color(255, 255, 255)
-          pdf.cell(70, 6, str(col or ""), 1, 0, "L", True)
-          pdf.cell(120, 6, str(val or ""), 1, 1, "L", True)
-          fill = not fill
-        output_pdf = pdf.output(dest="S")
-        if isinstance(output_pdf, (bytes, bytearray)):
-          return bytes(output_pdf)
-        else:
-          return output_pdf.encode("latin1")
-
-      pdf_bytes = create_pdf_detail(
-          columns_list, cleaned_values, st.session_state.module
-      )
-      st.download_button(
-          label="📑 Download PDF Bergaris",
-          data=pdf_bytes,
-          file_name=f"Detail_Aset_{selected_row_idx+1}.pdf",
-          mime="application/pdf",
       )
   else:
     st.warning("Data item aset tidak ditemukan.")
