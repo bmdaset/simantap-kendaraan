@@ -668,9 +668,13 @@ def load_kibc_data():
     return pd.DataFrame()
 
 
-df_kendaraan = load_kendaraan_data()
-df_tanah = load_kiba_data()
-df_gedung = load_kibc_data()
+# Inisialisasi State DataFrame di session agar perubahan data (Edit) langsung tersimpan di memori aktif
+if "df_kendaraan_live" not in st.session_state:
+  st.session_state.df_kendaraan_live = load_kendaraan_data()
+if "df_tanah_live" not in st.session_state:
+  st.session_state.df_tanah_live = load_kiba_data()
+if "df_gedung_live" not in st.session_state:
+  st.session_state.df_gedung_live = load_kibc_data()
 
 if "page" not in st.session_state:
   st.session_state.page = "menu"
@@ -736,7 +740,7 @@ if st.session_state.page == "menu":
         f"""
         <div class="card-menu-kendaraan">
             <h3 style="margin-top:0; color:#fff;">🚗 Kendaraan Dinas</h3>
-            <p style="color:#f7fafc; font-size:14px;"><b>Total Unit:</b> {len(df_kendaraan):,} Data<br>Kelola mobil, motor, pick-up, & alat berat.</p>
+            <p style="color:#f7fafc; font-size:14px;"><b>Total Unit:</b> {len(st.session_state.df_kendaraan_live):,} Data<br>Kelola mobil, motor, pick-up, & alat berat.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -753,7 +757,7 @@ if st.session_state.page == "menu":
         f"""
         <div class="card-menu-tanah">
             <h3 style="margin-top:0; color:#fff;">🌍 KIB A - Tanah</h3>
-            <p style="color:#f7fafc; font-size:14px;"><b>Total Bidang:</b> {len(df_tanah):,} Data<br>Kelola data aset tanah dan alamat lokasi.</p>
+            <p style="color:#f7fafc; font-size:14px;"><b>Total Bidang:</b> {len(st.session_state.df_tanah_live):,} Data<br>Kelola data aset tanah dan alamat lokasi.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -770,7 +774,7 @@ if st.session_state.page == "menu":
         f"""
         <div class="card-menu-gedung">
             <h3 style="margin-top:0; color:#fff;">🏢 KIB C - Gedung</h3>
-            <p style="color:#744210; font-size:14px;"><b>Total Gedung:</b> {len(df_gedung):,} Data<br>Kelola gedung & bangunan permanen.</p>
+            <p style="color:#744210; font-size:14px;"><b>Total Gedung:</b> {len(st.session_state.df_gedung_live):,} Data<br>Kelola gedung & bangunan permanen.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -791,6 +795,9 @@ elif st.session_state.page == "table":
   with col_ref:
     if st.button("🔄 Refresh Data"):
       st.cache_data.clear()
+      st.session_state.df_kendaraan_live = load_kendaraan_data()
+      st.session_state.df_tanah_live = load_kiba_data()
+      st.session_state.df_gedung_live = load_kibc_data()
       st.rerun()
 
   if st.session_state.module == "kendaraan":
@@ -807,14 +814,14 @@ elif st.session_state.page == "table":
   )
 
   if st.session_state.module == "kendaraan":
-    active_df = df_kendaraan
+    active_df = st.session_state.df_kendaraan_live
     keyword = st.session_state.keyword
     if keyword != "":
       active_df = active_df[active_df["Kategori_Jenis"] == keyword]
   elif st.session_state.module == "tanah":
-    active_df = df_tanah
+    active_df = st.session_state.df_tanah_live
   else:
-    active_df = df_gedung
+    active_df = st.session_state.df_gedung_live
 
   pilih_skpd = "Semua SKPD"
   if not active_df.empty:
@@ -862,8 +869,6 @@ elif st.session_state.page == "table":
     )
 
   columns_to_drop = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"]
-  
-  # Simpan salinan active_df asli yang sudah terfilter agar indeks aslinya tetap terjaga
   filtered_active_df = active_df.copy()
 
   display_df = filtered_active_df.drop(
@@ -886,12 +891,12 @@ elif st.session_state.page == "table":
       selection_mode="single-row",
   )
 
-  # Penangkapan indeks baris yang akurat berdasarkan baris tabel yang diklik
   selected_rows = event.selection.rows if event and event.selection else []
   if selected_rows:
     selected_iloc = selected_rows[0]
-    # Ambil indeks asli dari filtered_active_df secara aman menggunakan iloc
-    st.session_state.selected_original_index = filtered_active_df.index[selected_iloc]
+    st.session_state.selected_original_index = filtered_active_df.index[
+        selected_iloc
+    ]
     st.session_state.page = "detail"
     st.rerun()
 
@@ -988,13 +993,13 @@ elif st.session_state.page == "table":
 
 elif st.session_state.page == "detail":
   if st.session_state.module == "kendaraan":
-    active_df = df_kendaraan
+    active_df = st.session_state.df_kendaraan_live
     table_bg_color = "2b6cb0"
   elif st.session_state.module == "tanah":
-    active_df = df_tanah
+    active_df = st.session_state.df_tanah_live
     table_bg_color = "276749"
   else:
-    active_df = df_gedung
+    active_df = st.session_state.df_gedung_live
     table_bg_color = "975a16"
 
   col_back_det, col_empty = st.columns([2, 5])
@@ -1011,17 +1016,12 @@ elif st.session_state.page == "detail":
 
   selected_idx = st.session_state.get("selected_original_index", None)
 
-  if (
-      selected_idx is not None
-      and selected_idx in active_df.index
-  ):
-    # Ambil baris murni dari dataframe master/aktif menggunakan indeks aslinya
+  if selected_idx is not None and selected_idx in active_df.index:
     row_full = active_df.loc[selected_idx]
-    
-    # Buang kolom helper internal jika ada di baris tersebut sebelum ditampilkan
+
     columns_to_drop = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"]
     columns_list = [c for c in active_df.columns if c not in columns_to_drop]
-    
+
     cleaned_values = []
     for col in columns_list:
       val = row_full[col]
@@ -1070,131 +1070,194 @@ elif st.session_state.page == "detail":
     st.dataframe(styled_preview, use_container_width=True, height=500)
 
     st.markdown("---")
-    st.markdown(
-        "<h4 style='font-weight:600; color:#2d3748;'>📥 Unduh Dokumen"
-        " Detail</h4>",
-        unsafe_allow_html=True,
+
+    # TAB MENU AKSI: Unduh Dokumen & Menu Edit Data Terpisah
+    tab_unduh, tab_edit = st.tabs(
+        ["📥 Unduh Dokumen Detail", "✏️ Menu Edit Data Aset"]
     )
 
-    col_e1, col_e2, col_e3 = st.columns(3)
+    with tab_unduh:
+      col_e1, col_e2, col_e3 = st.columns(3)
 
-    with col_e1:
+      with col_e1:
 
-      def create_styled_vertical_excel(cols, vals, bg_hex):
-        card_df = pd.DataFrame(
-            {"Atribut / Kolom Data": cols, "Keterangan / Isi Data": vals}
-        )
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-          card_df.to_excel(writer, index=False, sheet_name="Detail Aset")
-        output.seek(0)
-        wb = openpyxl.load_workbook(output)
-        ws = wb.active
-        thin_border = Border(
-            left=Side(style="thin", color="888888"),
-            right=Side(style="thin", color="888888"),
-            top=Side(style="thin", color="888888"),
-            bottom=Side(style="thin", color="888888"),
-        )
-        header_fill = PatternFill(
-            start_color=bg_hex, end_color=bg_hex, fill_type="solid"
-        )
-        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-        fill_even = PatternFill(
-            start_color="F9FAFB", end_color="F9FAFB", fill_type="solid"
-        )
-
-        for col_idx in range(1, 3):
-          cell = ws.cell(row=1, column=col_idx)
-          cell.fill = header_fill
-          cell.font = header_font
-          cell.alignment = Alignment(
-              horizontal="center", vertical="center", wrap_text=True
+        def create_styled_vertical_excel(cols, vals, bg_hex):
+          card_df = pd.DataFrame(
+              {"Atribut / Kolom Data": cols, "Keterangan / Isi Data": vals}
+          )
+          output = BytesIO()
+          with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            card_df.to_excel(writer, index=False, sheet_name="Detail Aset")
+          output.seek(0)
+          wb = openpyxl.load_workbook(output)
+          ws = wb.active
+          thin_border = Border(
+              left=Side(style="thin", color="888888"),
+              right=Side(style="thin", color="888888"),
+              top=Side(style="thin", color="888888"),
+              bottom=Side(style="thin", color="888888"),
+          )
+          header_fill = PatternFill(
+              start_color=bg_hex, end_color=bg_hex, fill_type="solid"
+          )
+          header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+          fill_even = PatternFill(
+              start_color="F9FAFB", end_color="F9FAFB", fill_type="solid"
           )
 
-        for row_idx in range(2, ws.max_row + 1):
-          is_even = row_idx % 2 == 0
           for col_idx in range(1, 3):
-            cell = ws.cell(row=row_idx, column=col_idx)
-            cell.border = thin_border
-            cell.alignment = Alignment(vertical="center", wrap_text=True)
-            if is_even:
-              cell.fill = fill_even
+            cell = ws.cell(row=1, column=col_idx)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(
+                horizontal="center", vertical="center", wrap_text=True
+            )
 
-        ws.column_dimensions["A"].width = 30
-        ws.column_dimensions["B"].width = 50
-        final_output = BytesIO()
-        wb.save(final_output)
-        return final_output.getvalue()
+          for row_idx in range(2, ws.max_row + 1):
+            is_even = row_idx % 2 == 0
+            for col_idx in range(1, 3):
+              cell = ws.cell(row=row_idx, column=col_idx)
+              cell.border = thin_border
+              cell.alignment = Alignment(vertical="center", wrap_text=True)
+              if is_even:
+                cell.fill = fill_even
 
-      excel_data = create_styled_vertical_excel(
-          columns_list, cleaned_values, table_bg_color
-      )
-      st.download_button(
-          label="📊 Download Excel Bergaris",
-          data=excel_data,
-          file_name=f"Detail_Aset_{selected_idx+1}.xlsx",
-          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      )
+          ws.column_dimensions["A"].width = 30
+          ws.column_dimensions["B"].width = 50
+          final_output = BytesIO()
+          wb.save(final_output)
+          return final_output.getvalue()
 
-    with col_e2:
-      csv_data = detail_df.to_csv(index=False).encode("utf-8")
-      st.download_button(
-          label="📄 Download CSV Detail",
-          data=csv_data,
-          file_name=f"Detail_Aset_{selected_idx+1}.csv",
-          mime="text/csv",
-      )
+        excel_data = create_styled_vertical_excel(
+            columns_list, cleaned_values, table_bg_color
+        )
+        st.download_button(
+            label="📊 Download Excel Bergaris",
+            data=excel_data,
+            file_name=f"Detail_Aset_{selected_idx+1}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
-    with col_e3:
+      with col_e2:
+        csv_data = detail_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📄 Download CSV Detail",
+            data=csv_data,
+            file_name=f"Detail_Aset_{selected_idx+1}.csv",
+            mime="text/csv",
+        )
 
-      def create_pdf_detail(cols, vals, module_type):
-        pdf = FPDF(orientation="P", unit="mm", format="A4")
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 14)
-        if module_type == "kendaraan":
-          pdf.set_text_color(43, 108, 176)
-        elif module_type == "tanah":
-          pdf.set_text_color(39, 103, 73)
-        else:
-          pdf.set_text_color(151, 90, 22)
-        pdf.cell(0, 10, "DETAIL INFORMASI ASET PEMERINTAH DAERAH", 0, 1, "C")
-        pdf.ln(4)
-        pdf.set_font("Arial", "B", 10)
-        if module_type == "kendaraan":
-          pdf.set_fill_color(43, 108, 176)
-        elif module_type == "tanah":
-          pdf.set_fill_color(39, 103, 73)
-        else:
-          pdf.set_fill_color(151, 90, 22)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(70, 7, "Atribut / Kolom Data", 1, 0, "C", True)
-        pdf.cell(120, 7, "Keterangan / Isi Data", 1, 1, "C", True)
-        pdf.set_font("Arial", "", 9)
-        pdf.set_text_color(0, 0, 0)
-        fill = False
-        for col, val in zip(cols, vals):
-          if fill:
-            pdf.set_fill_color(240, 244, 248)
+      with col_e3:
+
+        def create_pdf_detail(cols, vals, module_type):
+          pdf = FPDF(orientation="P", unit="mm", format="A4")
+          pdf.add_page()
+          pdf.set_font("Arial", "B", 14)
+          if module_type == "kendaraan":
+            pdf.set_text_color(43, 108, 176)
+          elif module_type == "tanah":
+            pdf.set_text_color(39, 103, 73)
           else:
-            pdf.set_temp = pdf.set_fill_color(255, 255, 255)
-          pdf.cell(70, 6, str(col or ""), 1, 0, "L", True)
-          pdf.cell(120, 6, str(val or ""), 1, 1, "L", True)
-          fill = not fill
-        output_pdf = pdf.output(dest="S")
-        if isinstance(output_pdf, (bytes, bytearray)):
-          return bytes(output_pdf)
-        else:
-          return output_pdf.encode("latin1")
+            pdf.set_text_color(151, 90, 22)
+          pdf.cell(0, 10, "DETAIL INFORMASI ASET PEMERINTAH DAERAH", 0, 1, "C")
+          pdf.ln(4)
+          pdf.set_font("Arial", "B", 10)
+          if module_type == "kendaraan":
+            pdf.set_fill_color(43, 108, 176)
+          elif module_type == "tanah":
+            pdf.set_fill_color(39, 103, 73)
+          else:
+            pdf.set_fill_color(151, 90, 22)
+          pdf.set_text_color(255, 255, 255)
+          pdf.cell(70, 7, "Atribut / Kolom Data", 1, 0, "C", True)
+          pdf.cell(120, 7, "Keterangan / Isi Data", 1, 1, "C", True)
+          pdf.set_font("Arial", "", 9)
+          pdf.set_text_color(0, 0, 0)
+          fill = False
+          for col, val in zip(cols, vals):
+            if fill:
+              pdf.set_fill_color(240, 244, 248)
+            else:
+              pdf.set_temp = pdf.set_fill_color(255, 255, 255)
+            pdf.cell(70, 6, str(col or ""), 1, 0, "L", True)
+            pdf.cell(120, 6, str(val or ""), 1, 1, "L", True)
+            fill = not fill
+          output_pdf = pdf.output(dest="S")
+          if isinstance(output_pdf, (bytes, bytearray)):
+            return bytes(output_pdf)
+          else:
+            return output_pdf.encode("latin1")
 
-      pdf_bytes = create_pdf_detail(
-          columns_list, cleaned_values, st.session_state.module
+        pdf_bytes = create_pdf_detail(
+            columns_list, cleaned_values, st.session_state.module
+        )
+        st.download_button(
+            label="📑 Download PDF Bergaris",
+            data=pdf_bytes,
+            file_name=f"Detail_Aset_{selected_idx+1}.pdf",
+            mime="application/pdf",
+        )
+
+    with tab_edit:
+      st.markdown(
+          "<p style='color:#2d3748;'>Silakan perbarui informasi atribut data"
+          " aset di bawah ini. Perubahan akan langsung tersimpan ke dalam"
+          " database memori aplikasi.</p>",
+          unsafe_allow_html=True,
       )
-      st.download_button(
-          label="📑 Download PDF Bergaris",
-          data=pdf_bytes,
-          file_name=f"Detail_Aset_{selected_idx+1}.pdf",
-          mime="application/pdf",
-      )
+
+      with st.form(key="form_edit_aset"):
+        updated_inputs = {}
+        # Membagi form ke dalam 2 kolom agar rapi
+        form_col1, form_col2 = st.columns(2)
+
+        for i, col_name in enumerate(columns_list):
+          current_val = row_full[col_name]
+          val_str = "" if pd.isna(current_val) else str(current_val)
+
+          target_col = form_col1 if i % 2 == 0 else form_col2
+          with target_col:
+            updated_inputs[col_name] = st.text_input(
+                label=col_name,
+                value=val_str,
+                key=f"input_edit_{selected_idx}_{col_name}",
+            )
+
+        submit_edit = st.form_submit_button("💾 Simpan Perubahan Data")
+
+        if submit_edit:
+          # Perbarui data langsung pada active_df live di session_state
+          for col_name, new_val in updated_inputs.items():
+            active_df.at[selected_idx, col_name] = new_val
+
+          # Update juga nilai bersih (Harga Clean) jika kolom harga diubah
+          if "Harga_Clean" in active_df.columns:
+            harga_col = next(
+                (
+                    c
+                    for c in active_df.columns
+                    if "harga" in c.lower()
+                    or "rupiah" in c.lower()
+                    or "nilai" in c.lower()
+                ),
+                None,
+            )
+            if harga_col and harga_col in updated_inputs:
+              cleaned_harga_val = (
+                  pd.to_numeric(
+                      pd.Series([updated_inputs[harga_col]])
+                      .astype(str)
+                      .str.replace(r"[^\d.]", "", regex=True),
+                      errors="coerce",
+                  ).fillna(0)
+                  .iloc[0]
+              )
+              active_df.at[selected_idx, "Harga_Clean"] = cleaned_harga_val
+
+          st.success(
+              "✅ Data aset berhasil diperbarui! Silakan kembali ke tabel"
+              " utama untuk melihat perubahan."
+          )
+          st.rerun()
   else:
     st.warning("Data item aset tidak ditemukan.")
