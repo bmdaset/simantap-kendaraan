@@ -680,8 +680,8 @@ if "keyword" not in st.session_state:
   st.session_state.keyword = ""
 if "title" not in st.session_state:
   st.session_state.title = ""
-if "selected_row_idx" not in st.session_state:
-  st.session_state.selected_row_idx = None
+if "selected_original_index" not in st.session_state:
+  st.session_state.selected_original_index = None
 
 if st.session_state.page in ["table", "detail"]:
   if st.session_state.module == "kendaraan":
@@ -862,8 +862,12 @@ elif st.session_state.page == "table":
     )
 
   columns_to_drop = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"]
-  display_df = active_df.drop(
-      columns=[c for c in columns_to_drop if c in active_df.columns],
+  
+  # Simpan salinan active_df asli yang sudah terfilter agar indeks aslinya tetap terjaga
+  filtered_active_df = active_df.copy()
+
+  display_df = filtered_active_df.drop(
+      columns=[c for c in columns_to_drop if c in filtered_active_df.columns],
       errors="ignore",
   ).reset_index(drop=True)
 
@@ -882,11 +886,12 @@ elif st.session_state.page == "table":
       selection_mode="single-row",
   )
 
-  # Cek apakah baris dipilih melalui klik interaktif tabel (Diperbaiki di sini)
+  # Penangkapan indeks baris yang akurat berdasarkan baris tabel yang diklik
   selected_rows = event.selection.rows if event and event.selection else []
   if selected_rows:
     selected_iloc = selected_rows[0]
-    st.session_state.selected_row_idx = display_df.index[selected_iloc]
+    # Ambil indeks asli dari filtered_active_df secara aman menggunakan iloc
+    st.session_state.selected_original_index = filtered_active_df.index[selected_iloc]
     st.session_state.page = "detail"
     st.rerun()
 
@@ -992,12 +997,6 @@ elif st.session_state.page == "detail":
     active_df = df_gedung
     table_bg_color = "975a16"
 
-  columns_to_drop = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"]
-  display_df = active_df.drop(
-      columns=[c for c in columns_to_drop if c in active_df.columns],
-      errors="ignore",
-  ).reset_index(drop=True)
-
   col_back_det, col_empty = st.columns([2, 5])
   with col_back_det:
     if st.button("⬅️ Kembali ke Tabel Utama"):
@@ -1010,18 +1009,22 @@ elif st.session_state.page == "detail":
       unsafe_allow_html=True,
   )
 
-  selected_row_idx = st.session_state.get("selected_row_idx", None)
+  selected_idx = st.session_state.get("selected_original_index", None)
 
   if (
-      selected_row_idx is not None
-      and selected_row_idx in display_df.index
+      selected_idx is not None
+      and selected_idx in active_df.index
   ):
-    row_data = display_df.loc[selected_row_idx]
-    columns_list = list(display_df.columns)
-
+    # Ambil baris murni dari dataframe master/aktif menggunakan indeks aslinya
+    row_full = active_df.loc[selected_idx]
+    
+    # Buang kolom helper internal jika ada di baris tersebut sebelum ditampilkan
+    columns_to_drop = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"]
+    columns_list = [c for c in active_df.columns if c not in columns_to_drop]
+    
     cleaned_values = []
     for col in columns_list:
-      val = row_data[col]
+      val = row_full[col]
       if pd.isna(val):
         cleaned_values.append("None")
       elif isinstance(val, (int, float)):
@@ -1130,7 +1133,7 @@ elif st.session_state.page == "detail":
       st.download_button(
           label="📊 Download Excel Bergaris",
           data=excel_data,
-          file_name=f"Detail_Aset_{selected_row_idx+1}.xlsx",
+          file_name=f"Detail_Aset_{selected_idx+1}.xlsx",
           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
 
@@ -1139,7 +1142,7 @@ elif st.session_state.page == "detail":
       st.download_button(
           label="📄 Download CSV Detail",
           data=csv_data,
-          file_name=f"Detail_Aset_{selected_row_idx+1}.csv",
+          file_name=f"Detail_Aset_{selected_idx+1}.csv",
           mime="text/csv",
       )
 
@@ -1174,7 +1177,7 @@ elif st.session_state.page == "detail":
           if fill:
             pdf.set_fill_color(240, 244, 248)
           else:
-            pdf.set_fill_color(255, 255, 255)
+            pdf.set_temp = pdf.set_fill_color(255, 255, 255)
           pdf.cell(70, 6, str(col or ""), 1, 0, "L", True)
           pdf.cell(120, 6, str(val or ""), 1, 1, "L", True)
           fill = not fill
@@ -1190,7 +1193,7 @@ elif st.session_state.page == "detail":
       st.download_button(
           label="📑 Download PDF Bergaris",
           data=pdf_bytes,
-          file_name=f"Detail_Aset_{selected_row_idx+1}.pdf",
+          file_name=f"Detail_Aset_{selected_idx+1}.pdf",
           mime="application/pdf",
       )
   else:
