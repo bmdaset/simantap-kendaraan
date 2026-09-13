@@ -867,7 +867,6 @@ elif st.session_state.page == "table":
       errors="ignore",
   ).reset_index(drop=True)
 
-  # Menggunakan event selection pada st.dataframe untuk klik langsung pada nama barang/baris
   st.markdown(
       "<p style='font-weight:600; color:#2d3748;'>💡 <i>Klik pada baris data"
       " barang di bawah untuk melihat preview detail lengkap secara"
@@ -883,16 +882,16 @@ elif st.session_state.page == "table":
       selection_mode="single-row",
   )
 
-  # Cek apakah baris dipilih melalui klik interaktif tabel
+  # Cek apakah baris dipilih melalui klik interaktif tabel (Diperbaiki di sini)
   selected_rows = event.selection.rows if event and event.selection else []
   if selected_rows:
-    st.session_state.selected_row_idx = display_df.index[selected_rows[0]]
+    selected_iloc = selected_rows[0]
+    st.session_state.selected_row_idx = display_df.index[selected_iloc]
     st.session_state.page = "detail"
     st.rerun()
 
   st.markdown("---")
 
-  # Rekapitulasi di bawah tabel utama
   if st.session_state.module == "kendaraan":
     rekap_title = (
         f"📊 Rekapitulasi Kategori Kendaraan & Nilai: {pilih_skpd}"
@@ -983,7 +982,6 @@ elif st.session_state.page == "table":
       st.dataframe(summary_gedung, use_container_width=True)
 
 elif st.session_state.page == "detail":
-  # Halaman Khusus Preview Detail Aset dan Download
   if st.session_state.module == "kendaraan":
     active_df = df_kendaraan
     table_bg_color = "2b6cb0"
@@ -1012,12 +1010,12 @@ elif st.session_state.page == "detail":
       unsafe_allow_html=True,
   )
 
-  selected_row_idx = st.session_state.get(
-      "selected_row_idx",
-      0 if not display_df.empty else None,
-  )
+  selected_row_idx = st.session_state.get("selected_row_idx", None)
 
-  if selected_row_idx is not None and selected_row_idx < len(display_df):
+  if (
+      selected_row_idx is not None
+      and selected_row_idx in display_df.index
+  ):
     row_data = display_df.loc[selected_row_idx]
     columns_list = list(display_df.columns)
 
