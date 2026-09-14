@@ -96,6 +96,32 @@ st.markdown(
 )
 
 
+def bersihkan_nama_kolom(cols):
+  cleaned = []
+  for idx, c in enumerate(cols):
+    c_str = str(c).strip()
+    c_lower = c_str.lower()
+    # Pengecualian: Pertahankan kata 'harga' jika berada di baris indeks ke-15 (atau urutan ke-16)
+    if idx == 15 or "harga" in c_lower and idx == 15:
+      cleaned.append(c_str)
+    else:
+      # Hilangkan kata 'harga' dari keterangan, harga skpd _1, dll.
+      c_str_new = (
+          c_str.replace("Harga", "")
+          .replace("harga", "")
+          .replace("HARGA", "")
+          .strip()
+      )
+      if (
+          not c_str_new
+          or c_str_new.lower() == "none"
+          or c_str_new.startswith("Unnamed")
+      ):
+        c_str_new = f"Kolom_{idx}"
+      cleaned.append(c_str_new)
+  return cleaned
+
+
 @st.cache_data
 def load_kendaraan_data():
   file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
@@ -161,6 +187,9 @@ def load_kendaraan_data():
         )
       else:
         transformed_cols.append(c)
+
+    # Terapkan pembersihan kata 'harga' sesuai ketentuan
+    transformed_cols = bersihkan_nama_kolom(transformed_cols)
 
     seen = {}
     unique_cols = []
@@ -403,6 +432,8 @@ def load_kiba_data():
 
       cleaned_cols.append(c_str)
 
+    cleaned_cols = bersihkan_nama_kolom(cleaned_cols)
+
     seen = {}
     unique_cols = []
     for c in cleaned_cols:
@@ -582,6 +613,8 @@ def load_kibc_data():
           c_str = f"Kolom_{idx_col}"
       cleaned_cols.append(c_str)
 
+    cleaned_cols = bersihkan_nama_kolom(cleaned_cols)
+
     seen = {}
     unique_cols = []
     for c in cleaned_cols:
@@ -668,7 +701,7 @@ def load_kibc_data():
     return pd.DataFrame()
 
 
-# Inisialisasi State DataFrame di session agar perubahan data (Edit) langsung tersimpan di memori aktif
+# Inisialisasi State DataFrame di session
 if "df_kendaraan_live" not in st.session_state:
   st.session_state.df_kendaraan_live = load_kendaraan_data()
 if "df_tanah_live" not in st.session_state:
@@ -1071,7 +1104,6 @@ elif st.session_state.page == "detail":
 
     st.markdown("---")
 
-    # TAB MENU AKSI: Unduh Dokumen & Menu Edit Data Terpisah
     tab_unduh, tab_edit = st.tabs(
         ["📥 Unduh Dokumen Detail", "✏️ Menu Edit Data Aset"]
     )
@@ -1208,7 +1240,6 @@ elif st.session_state.page == "detail":
 
       with st.form(key="form_edit_aset"):
         updated_inputs = {}
-        # Membagi form ke dalam 2 kolom agar rapi
         form_col1, form_col2 = st.columns(2)
 
         for i, col_name in enumerate(columns_list):
@@ -1220,17 +1251,17 @@ elif st.session_state.page == "detail":
             updated_inputs[col_name] = st.text_input(
                 label=col_name,
                 value=val_str,
-                key=f"input_edit_{selected_idx}_{col_name}",
+                key=f"input_edit_{selected_idx}_{i}_{col_name}",
             )
 
         submit_edit = st.form_submit_button("💾 Simpan Perubahan Data")
 
         if submit_edit:
-          # Perbarui data langsung pada active_df live di session_state
+          # Memperbarui data secara langsung pada active_df di session_state menggunakan .loc agar tidak error
           for col_name, new_val in updated_inputs.items():
-            active_df.at[selected_idx, col_name] = new_val
+            active_df.loc[selected_idx, col_name] = new_val
 
-          # Update juga nilai bersih (Harga Clean) jika kolom harga diubah
+          # Sinkronisasi ulang jika kolom harga yang diubah
           if "Harga_Clean" in active_df.columns:
             harga_col = next(
                 (
@@ -1252,11 +1283,10 @@ elif st.session_state.page == "detail":
                   ).fillna(0)
                   .iloc[0]
               )
-              active_df.at[selected_idx, "Harga_Clean"] = cleaned_harga_val
+              active_df.loc[selected_idx, "Harga_Clean"] = cleaned_harga_val
 
           st.success(
-              "✅ Data aset berhasil diperbarui! Silakan kembali ke tabel"
-              " utama untuk melihat perubahan."
+              "✅ Data aset berhasil diperbarui! Perubahan telah disimpan."
           )
           st.rerun()
   else:
