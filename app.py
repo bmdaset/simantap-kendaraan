@@ -1,9 +1,7 @@
 from io import BytesIO
 import glob
 import os
-from fpdf import FPDF
 import openpyxl
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 import pandas as pd
 import streamlit as st
 
@@ -16,7 +14,6 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Global Background Tema BMD */
     .stApp {
         background: linear-gradient(135deg, #eef2f5 0%, #e2e8f0 100%);
     }
@@ -42,7 +39,6 @@ st.markdown(
         font-size: 15px;
         color: #edf2f7;
     }
-    /* Kartu Menu Kendaraan */
     .card-menu-kendaraan {
         background: linear-gradient(135deg, #2b6cb0 0%, #4299e1 100%);
         padding: 24px;
@@ -52,7 +48,6 @@ st.markdown(
         margin-bottom: 15px;
         border-left: 6px solid #bee3f8;
     }
-    /* Kartu Menu KIB A Tanah */
     .card-menu-tanah {
         background: linear-gradient(135deg, #276749 0%, #38a169 100%);
         padding: 24px;
@@ -62,7 +57,6 @@ st.markdown(
         margin-bottom: 15px;
         border-left: 6px solid #c6f6d5;
     }
-    /* Kartu Menu KIB C Gedung & Bangunan */
     .card-menu-gedung {
         background: linear-gradient(135deg, #975a16 0%, #d69e2e 100%);
         padding: 24px;
@@ -96,579 +90,173 @@ st.markdown(
 )
 
 
-@st.cache_data
-def load_kendaraan_data():
-  file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
+def get_excel_filename():
+  file_path = "REKAP KENDARAAN TA. 2026.YP .xlsx"
   if not os.path.exists(file_path):
     all_excel = glob.glob("*.xlsx") + glob.glob("*.xls")
     if all_excel:
-      file_path = all_excel[0]
-    else:
-      return pd.DataFrame()
+      return all_excel[0]
+  return file_path
 
+
+@st.cache_data
+def load_kendaraan_data():
+  file_path = get_excel_filename()
+  if not os.path.exists(file_path):
+    return pd.DataFrame()
   try:
-    df_raw = pd.read_excel(
-        file_path, sheet_name="KENDARAAN DINAS", header=None
-    )
-    header_row_idx = 13
-    for idx, row in df_raw.head(25).iterrows():
-      row_str = " ".join([str(val).lower() for val in row.values])
-      if "jenis barang" in row_str or "merk" in row_str:
-        header_row_idx = idx
-        break
+    df = pd.read_excel(file_path, sheet_name="KENDARAAN DINAS", header=0)
+    df.columns = [str(c).strip() for c in df.columns]
 
-    h1 = (
-        df_raw.iloc[header_row_idx]
-        .fillna("")
-        .astype(str)
-        .str.strip()
-        .tolist()
-    )
-    if header_row_idx + 1 < len(df_raw):
-      h2 = (
-          df_raw.iloc[header_row_idx + 1]
+    if "no_urut" in df.columns:
+      df = df.dropna(subset=["no_urut"]).reset_index(drop=True)
+    if len(df) > 1609:
+      df = df.iloc[:1609].reset_index(drop=True)
+
+    if "pengguna_pemakai" not in df.columns:
+      df["pengguna_pemakai"] = ""
+    else:
+      df["pengguna_pemakai"] = (
+          df["pengguna_pemakai"]
           .fillna("")
           .astype(str)
-          .str.strip()
-          .tolist()
+          .replace(["nan", "None", "NONE"], "")
       )
-      combined_cols = []
-      last_main = ""
-      for m, s in zip(h1, h2):
-        if m != "" and not m.startswith("Unnamed"):
-          last_main = m
-        if s != "" and not s.startswith("Unnamed"):
-          if last_main and last_main.lower() not in s.lower():
-            combined_cols.append(f"{last_main} - {s}")
-          else:
-            combined_cols.append(s)
-        else:
-          combined_cols.append(last_main if last_main else "Kolom")
-      final_cols = combined_cols
-      data_start_idx = header_row_idx + 2
-    else:
-      final_cols = h1
-      data_start_idx = header_row_idx + 1
-
-    transformed_cols = []
-    for c in final_cols:
-      c_lower = c.lower()
-      if "pembelian" in c_lower:
-        transformed_cols.append("Tahun Pembuatan")
-      elif c_lower.startswith("tahun"):
-        transformed_cols.append(
-            c.replace("Tahun", "Nomor").replace("tahun", "Nomor")
-        )
-      else:
-        transformed_cols.append(c)
-
-    seen = {}
-    unique_cols = []
-    for c in transformed_cols:
-      if c in seen:
-        seen[c] += 1
-        unique_cols.append(f"{c}_{seen[c]}")
-      else:
-        seen[c] = 0
-        unique_cols.append(c)
-
-    df = df_raw.iloc[data_start_idx:].copy()
-    df.columns = unique_cols[: df.shape[1]]
-    if df.shape[1] > len(unique_cols):
-      for i in range(len(unique_cols), df.shape[1]):
-        df.rename(columns={df.columns[i]: f"Kolom_{i}"}, inplace=True)
-
-    drop_indices = [14, 19, 20]
-    valid_drop_indices = [i for i in drop_indices if i < len(df.columns)]
-    df = df.drop(df.columns[valid_drop_indices], axis=1).reset_index(drop=True)
-    df = df.dropna(how="all").reset_index(drop=True)
-    df = df[df.iloc[:, 0].notna()].reset_index(drop=True)
-
-    if not df.empty:
-      first_col_name = df.columns[0]
-      df = df[
-          ~df[first_col_name]
-          .astype(str)
-          .str.lower()
-          .str.contains("jumlah|total|n o", na=False)
-      ].reset_index(drop=True)
 
     df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
     df["Harga_Clean"] = 0.0
     df["Kategori_Jenis"] = "Mobil"
 
-    if not df.empty:
-      skpd_col = next(
-          (
-              c
-              for c in df.columns
-              if c == "SKPD"
-              or "skpd" in c.lower()
-              or "dinas" in c.lower()
-              or "unit" in c.lower()
-          ),
-          None,
+    skpd_col = next(
+        (
+            c
+            for c in df.columns
+            if "skpd" in c.lower() or "dinas" in c.lower() or "unit" in c.lower()
+        ),
+        None,
+    )
+    if skpd_col:
+      df["SKPD_Nama"] = (
+          df[skpd_col]
+          .ffill()
+          .fillna("DINAS / INSTANSI LAINNYA")
+          .astype(str)
+          .str.upper()
+          .str.strip()
       )
-      if skpd_col:
-        df["SKPD_Nama"] = (
-            df[skpd_col]
-            .ffill()
-            .fillna("DINAS / INSTANSI LAINNYA")
-            .astype(str)
-            .str.upper()
-            .str.strip()
-        )
-        df[skpd_col] = df["SKPD_Nama"]
+      df[skpd_col] = df["SKPD_Nama"]
 
-      harga_col = next(
-          (
-              c
-              for c in df.columns
-              if "harga" in c.lower()
-              or "rupiah" in c.lower()
-              or "nilai" in c.lower()
-          ),
-          None,
-      )
-      if harga_col:
-        calculated_harga = (
-            pd.to_numeric(
-                df[harga_col]
-                .astype(str)
-                .str.replace(r"[^\d.]", "", regex=True),
-                errors="coerce",
-            ).fillna(0)
-            * 1000
-        )
-        df["Harga_Clean"] = calculated_harga
-        df[harga_col] = calculated_harga
+    harga_col = next(
+        (
+            c
+            for c in df.columns
+            if "harga" in c.lower()
+            or "rupiah" in c.lower()
+            or "nilai" in c.lower()
+        ),
+        None,
+    )
+    if harga_col:
+      raw_harga = pd.to_numeric(
+          df[harga_col].astype(str).str.replace(r"[^\d.]", "", regex=True),
+          errors="coerce",
+      ).fillna(0)
 
-      def deteksi_kategori(row):
-        combined = " ".join(
-            [str(val) for val in row.values if pd.notna(val)]
-        ).lower()
-        if any(
-            k in combined
-            for k in [
-                "sepeda motor",
-                "roda dua",
-                "trail",
-                "matic",
-                "klx",
-                "crf",
-                "bebek",
-                "scoopy",
-                "beat",
-                "vario",
-                "mio",
-                "motor",
-            ]
-        ):
-          return "Sepeda Motor"
-        elif any(k in combined for k in ["pick up", "pickup", "bak terbuka"]):
-          return "Pick Up"
-        elif any(
-            k in combined
-            for k in [
-                "excavator",
-                "bulldozer",
-                "loader",
-                "grader",
-                "crane",
-                "forklift",
-                "tractor",
-                "traktor",
-                "molen",
-                "roller",
-                "compactor",
-                "backhoe",
-                "alat berat",
-            ]
-        ):
-          return "Alat Berat"
-        else:
-          return "Mobil"
+      if raw_harga.median() < 100000 and raw_harga.median() > 0:
+        calculated_harga = raw_harga * 1000
+      else:
+        calculated_harga = raw_harga
 
-      df["Kategori_Jenis"] = df.apply(deteksi_kategori, axis=1)
+      df["Harga_Clean"] = calculated_harga
+      df[harga_col] = calculated_harga
 
+    def deteksi_kategori(row):
+      combined = " ".join(
+          [str(val) for val in row.values if pd.notna(val)]
+      ).lower()
+      if any(
+          k in combined
+          for k in [
+              "sepeda motor",
+              "roda dua",
+              "trail",
+              "matic",
+              "klx",
+              "crf",
+              "bebek",
+              "scoopy",
+              "beat",
+              "vario",
+              "mio",
+              "motor",
+          ]
+      ):
+        return "Sepeda Motor"
+      elif any(k in combined for k in ["pick up", "pickup", "bak terbuka"]):
+        return "Pick Up"
+      elif any(
+          k in combined
+          for k in [
+              "excavator",
+              "bulldozer",
+              "loader",
+              "grader",
+              "crane",
+              "forklift",
+              "tractor",
+              "traktor",
+              "molen",
+              "roller",
+              "compactor",
+              "backhoe",
+              "alat berat",
+          ]
+      ):
+        return "Alat Berat"
+      else:
+        return "Mobil"
+
+    df["Kategori_Jenis"] = df.apply(deteksi_kategori, axis=1)
     return df
   except Exception as e:
-    print("Error Load Kendaraan:", e)
     return pd.DataFrame()
 
 
 @st.cache_data
 def load_kiba_data():
-  file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
+  file_path = get_excel_filename()
   if not os.path.exists(file_path):
-    all_excel = glob.glob("*.xlsx") + glob.glob("*.xls")
-    if all_excel:
-      file_path = all_excel[0]
-    else:
-      return pd.DataFrame()
-
+    return pd.DataFrame()
   try:
-    xls = pd.ExcelFile(file_path)
-    sheet_names = xls.sheet_names
-    target_sheet = next(
-        (
-            s
-            for s in sheet_names
-            if "tanah" in s.lower()
-            or "kib a" in s.lower()
-            or "kiba" in s.lower()
-        ),
-        sheet_names[1] if len(sheet_names) > 1 else sheet_names[0],
-    )
-
-    df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
-
-    header_row_idx = 0
-    for idx, row in df_raw.head(25).iterrows():
-      row_str = " ".join([str(val).lower() for val in row.values])
-      if (
-          "luas" in row_str
-          or "alamat" in row_str
-          or "letak" in row_str
-          or "hak" in row_str
-      ):
-        header_row_idx = idx
-        break
-
-    h1 = (
-        df_raw.iloc[header_row_idx]
-        .fillna("")
-        .astype(str)
-        .str.strip()
-        .tolist()
-    )
-    if header_row_idx + 1 < len(df_raw):
-      h2 = (
-          df_raw.iloc[header_row_idx + 1]
-          .fillna("")
-          .astype(str)
-          .str.strip()
-          .tolist()
-      )
-      row_str_h2 = " ".join([str(v).lower() for v in h2])
-      if (
-          "m2" in row_str_h2
-          or "status" in row_str_h2
-          or "tanggal" in row_str_h2
-          or "nomor" in row_str_h2
-          or "sertifikat" in row_str_h2
-      ):
-        combined_cols = []
-        last_main = ""
-        for m, s in zip(h1, h2):
-          if m != "" and not m.startswith("Unnamed"):
-            last_main = m
-          if s != "" and not s.startswith("Unnamed"):
-            if last_main and last_main.lower() not in s.lower():
-              combined_cols.append(f"{last_main} - {s}")
-            else:
-              combined_cols.append(s)
-          else:
-            combined_cols.append(last_main if last_main else "Kolom")
-        final_cols = combined_cols
-        data_start_idx = header_row_idx + 2
-      else:
-        final_cols = h1
-        data_start_idx = header_row_idx + 1
-    else:
-      final_cols = h1
-      data_start_idx = header_row_idx + 1
-
-    cleaned_cols = []
-    for idx_col, c in enumerate(final_cols):
-      c_str = str(c).strip()
-      if idx_col == 9 or c_str.lower() == "letak/":
-        c_str = "Tanggal Sertifikat"
-      else:
-        if "alamat" not in c_str.lower():
-          c_str = (
-              c_str.replace("Letak/ - ", "")
-              .replace("Letak / - ", "")
-              .replace("Letak/", "")
-              .replace("letak/", "")
-              .strip()
-          )
-
-      if (
-          not c_str
-          or c_str.lower() == "none"
-          or c_str.startswith("Unnamed")
-      ):
-        c_str = f"Kolom_{idx_col}"
-
-      cleaned_cols.append(c_str)
-
-    seen = {}
-    unique_cols = []
-    for c in cleaned_cols:
-      if c in seen:
-        seen[c] += 1
-        unique_cols.append(f"{c}_{seen[c]}")
-      else:
-        seen[c] = 0
-        unique_cols.append(c)
-
-    df = df_raw.iloc[data_start_idx:].copy()
-    df.columns = unique_cols[: df.shape[1]]
-    if df.shape[1] > len(unique_cols):
-      for i in range(len(unique_cols), df.shape[1]):
-        df.rename(columns={df.columns[i]: f"Kolom_{i}"}, inplace=True)
-
-    df = df.dropna(how="all").reset_index(drop=True)
-    df = df[df.iloc[:, 0].notna()].reset_index(drop=True)
-
-    if not df.empty:
-      first_col_name = df.columns[0]
-      df = df[
-          ~df[first_col_name]
-          .astype(str)
-          .str.lower()
-          .str.contains("jumlah|total|n o", na=False)
-      ].reset_index(drop=True)
-
-    df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
-    df["Harga_Clean"] = 0.0
-
-    if not df.empty:
-      skpd_col = next(
-          (
-              c
-              for c in df.columns
-              if c == "SKPD"
-              or "skpd" in c.lower()
-              or "dinas" in c.lower()
-              or "unit" in c.lower()
-          ),
-          None,
-      )
-      if skpd_col:
-        df["SKPD_Nama"] = (
-            df[skpd_col]
-            .ffill()
-            .fillna("DINAS / INSTANSI LAINNYA")
-            .astype(str)
-            .str.upper()
-            .str.strip()
-        )
-        df[skpd_col] = df["SKPD_Nama"]
-
-      harga_col = next(
-          (
-              c
-              for c in df.columns
-              if "harga" in c.lower()
-              or "rupiah" in c.lower()
-              or "nilai" in c.lower()
-          ),
-          None,
-      )
-      if harga_col:
-        raw_harga = pd.to_numeric(
-            df[harga_col].astype(str).str.replace(r"[^\d.]", "", regex=True),
-            errors="coerce",
-        ).fillna(0)
-        if raw_harga.mean() > 0 and raw_harga.mean() < 100000:
-          calculated_harga = raw_harga * 1000
-        else:
-          calculated_harga = raw_harga
-
-        df["Harga_Clean"] = calculated_harga
-        df[harga_col] = calculated_harga
-
+    df = pd.read_excel(file_path, sheet_name="KIB A Tanah", header=0)
+    df.columns = [str(c).strip() for c in df.columns]
+    if "no" in df.columns:
+      df["no"] = range(1, len(df) + 1)
+    df = df.reset_index(drop=True)
     return df
   except Exception as e:
-    print("Error Load KIB A Tanah:", e)
     return pd.DataFrame()
 
 
 @st.cache_data
 def load_kibc_data():
-  file_path = "REKAP KENDARAAN TA. 2026.YP.xlsx"
+  file_path = get_excel_filename()
   if not os.path.exists(file_path):
-    all_excel = glob.glob("*.xlsx") + glob.glob("*.xls")
-    if all_excel:
-      file_path = all_excel[0]
-    else:
-      return pd.DataFrame()
-
+    return pd.DataFrame()
   try:
-    xls = pd.ExcelFile(file_path)
-    sheet_names = xls.sheet_names
-    target_sheet = next(
-        (
-            s
-            for s in sheet_names
-            if "gedung" in s.lower()
-            or "bangunan" in s.lower()
-            or "kib c" in s.lower()
-            or "kibc" in s.lower()
-        ),
-        None,
+    df = pd.read_excel(
+        file_path, sheet_name="KIB C - Gedung dan Bangunan", header=0
     )
-    if not target_sheet:
-      return pd.DataFrame()
-
-    df_raw = pd.read_excel(file_path, sheet_name=target_sheet, header=None)
-
-    header_row_idx = 0
-    for idx, row in df_raw.head(25).iterrows():
-      row_str = " ".join([str(val).lower() for val in row.values])
-      if any(
-          k in row_str
-          for k in [
-              "kode barang",
-              "nama barang",
-              "jenis barang",
-              "kondisi",
-              "luas lantai",
-          ]
-      ):
-        header_row_idx = idx
-        break
-
-    h1 = (
-        df_raw.iloc[header_row_idx]
-        .fillna("")
-        .astype(str)
-        .str.strip()
-        .tolist()
-    )
-    if header_row_idx + 1 < len(df_raw):
-      h2 = (
-          df_raw.iloc[header_row_idx + 1]
-          .fillna("")
-          .astype(str)
-          .str.strip()
-          .tolist()
-      )
-      combined_cols = []
-      last_main = ""
-      for m, s in zip(h1, h2):
-        if m != "" and not m.startswith("Unnamed"):
-          last_main = m
-        if s != "" and not s.startswith("Unnamed"):
-          if last_main and last_main.lower() not in s.lower():
-            combined_cols.append(f"{last_main} - {s}")
-          else:
-            combined_cols.append(s)
-        else:
-          combined_cols.append(last_main if last_main else "")
-      final_cols = combined_cols
-      data_start_idx = header_row_idx + 2
-    else:
-      final_cols = h1
-      data_start_idx = header_row_idx + 1
-
-    cleaned_cols = []
-    for idx_col, c in enumerate(final_cols):
-      c_str = str(c).strip()
-      if not c_str or c_str.lower() == "none" or c_str.startswith("Unnamed"):
-        if idx_col == 0:
-          c_str = "No"
-        elif idx_col == 1:
-          c_str = "Jenis / Nama Barang"
-        elif idx_col == 2:
-          c_str = "Kode Barang"
-        elif idx_col == 3:
-          c_str = "Nomor Register"
-        elif idx_col == 14:
-          c_str = "Harga (Rp)"
-        else:
-          c_str = f"Kolom_{idx_col}"
-      cleaned_cols.append(c_str)
-
-    seen = {}
-    unique_cols = []
-    for c in cleaned_cols:
-      if c in seen:
-        seen[c] += 1
-        unique_cols.append(f"{c}_{seen[c]}")
-      else:
-        seen[c] = 0
-        unique_cols.append(c)
-
-    df = df_raw.iloc[data_start_idx:].copy()
-    df.columns = unique_cols[: df.shape[1]]
-    if df.shape[1] > len(unique_cols):
-      for i in range(len(unique_cols), df.shape[1]):
-        df.rename(columns={df.columns[i]: f"Kolom_{i}"}, inplace=True)
-
+    df.columns = [str(c).strip() for c in df.columns]
     df = df.dropna(how="all").reset_index(drop=True)
-    df = df[df.iloc[:, 0].notna()].reset_index(drop=True)
-
-    if not df.empty:
-      first_col_name = df.columns[0]
-      df = df[
-          ~df[first_col_name]
-          .astype(str)
-          .str.lower()
-          .str.contains("jumlah|total|n o", na=False)
-      ].reset_index(drop=True)
-
-    df["SKPD_Nama"] = "DINAS / INSTANSI LAINNYA"
-    df["Harga_Clean"] = 0.0
-
-    if not df.empty:
-      skpd_col = next(
-          (
-              c
-              for c in df.columns
-              if c == "SKPD"
-              or "skpd" in c.lower()
-              or "dinas" in c.lower()
-              or "unit" in c.lower()
-          ),
-          None,
-      )
-      if skpd_col:
-        df["SKPD_Nama"] = (
-            df[skpd_col]
-            .ffill()
-            .fillna("DINAS / INSTANSI LAINNYA")
-            .astype(str)
-            .str.upper()
-            .str.strip()
-        )
-        df[skpd_col] = df["SKPD_Nama"]
-
-      harga_col = next(
-          (
-              c
-              for c in df.columns
-              if "harga" in c.lower()
-              or "rupiah" in c.lower()
-              or "nilai" in c.lower()
-          ),
-          None,
-      )
-      if not harga_col and len(df.columns) > 14:
-        harga_col = df.columns[14]
-
-      if harga_col:
-        raw_harga = pd.to_numeric(
-            df[harga_col].astype(str).str.replace(r"[^\d.]", "", regex=True),
-            errors="coerce",
-        ).fillna(0)
-        if raw_harga.mean() > 0 and raw_harga.mean() < 100000:
-          calculated_harga = raw_harga * 1000
-        else:
-          calculated_harga = raw_harga
-
-        df["Harga_Clean"] = calculated_harga
-        df[harga_col] = calculated_harga
-
+    if len(df) > 3522:
+      df = df.iloc[:3522].reset_index(drop=True)
     return df
   except Exception as e:
-    print("Error Load KIB C Gedung:", e)
     return pd.DataFrame()
 
 
-# Inisialisasi State DataFrame di session agar perubahan data (Edit) langsung tersimpan di memori aktif
+# Inisialisasi Session State
 if "df_kendaraan_live" not in st.session_state:
   st.session_state.df_kendaraan_live = load_kendaraan_data()
 if "df_tanah_live" not in st.session_state:
@@ -686,35 +274,6 @@ if "title" not in st.session_state:
   st.session_state.title = ""
 if "selected_original_index" not in st.session_state:
   st.session_state.selected_original_index = None
-
-if st.session_state.page in ["table", "detail"]:
-  if st.session_state.module == "kendaraan":
-    st.markdown(
-        """
-        <style>
-        .stApp { background: linear-gradient(135deg, #ebf8ff 0%, #bee3f8 100%); }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-  elif st.session_state.module == "tanah":
-    st.markdown(
-        """
-        <style>
-        .stApp { background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%); }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-  else:
-    st.markdown(
-        """
-        <style>
-        .stApp { background: linear-gradient(135deg, #fffaf0 0%, #feebc8 100%); }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
 st.markdown(
     """
@@ -787,7 +346,7 @@ if st.session_state.page == "menu":
       st.rerun()
 
 elif st.session_state.page == "table":
-  col_back, col_ref, col_title = st.columns([1.5, 1.5, 5])
+  col_back, col_ref = st.columns([1.5, 1.5])
   with col_back:
     if st.button("⬅️ Kembali ke Menu Utama"):
       st.session_state.page = "menu"
@@ -800,13 +359,11 @@ elif st.session_state.page == "table":
       st.session_state.df_gedung_live = load_kibc_data()
       st.rerun()
 
-  if st.session_state.module == "kendaraan":
-    module_accent = "#2b6cb0"
-  elif st.session_state.module == "tanah":
-    module_accent = "#276749"
-  else:
-    module_accent = "#975a16"
-
+  module_accent = (
+      "#2b6cb0"
+      if st.session_state.module == "kendaraan"
+      else ("#276749" if st.session_state.module == "tanah" else "#975a16")
+  )
   st.markdown(
       f"<h3 style='color:{module_accent}; font-weight:700;'>📂"
       f" {st.session_state.title}</h3>",
@@ -815,40 +372,99 @@ elif st.session_state.page == "table":
 
   if st.session_state.module == "kendaraan":
     active_df = st.session_state.df_kendaraan_live
-    keyword = st.session_state.keyword
-    if keyword != "":
-      active_df = active_df[active_df["Kategori_Jenis"] == keyword]
+    if st.session_state.keyword != "":
+      active_df = active_df[
+          active_df["Kategori_Jenis"] == st.session_state.keyword
+      ]
   elif st.session_state.module == "tanah":
     active_df = st.session_state.df_tanah_live
   else:
     active_df = st.session_state.df_gedung_live
 
   pilih_skpd = "Semua SKPD"
-  if not active_df.empty:
+  if not active_df.empty and "skpd" in active_df.columns:
     skpd_list = ["Semua SKPD"] + sorted(
-        list(active_df["SKPD_Nama"].dropna().unique())
+        list(active_df["skpd"].dropna().unique())
     )
     pilih_skpd = st.selectbox(
         "🏢 Filter Berdasarkan Nama SKPD / Dinas:", skpd_list
     )
+
+    # --- REKAPITULASI KATEGORI PER SKPD (JUMLAH BARANG & TOTAL NILAI) ---
+    if pilih_skpd != "Semua SKPD" and st.session_state.module == "kendaraan":
+      df_skpd_selected = active_df[active_df["SKPD_Nama"] == pilih_skpd]
+
+      st.markdown("---")
+      st.markdown(f"##### 📊 Rekapitulasi Kategori untuk: **{pilih_skpd}**")
+
+      if (
+          "Kategori_Jenis" in df_skpd_selected.columns
+          and "Harga_Clean" in df_skpd_selected.columns
+      ):
+        # Tambahan Informasi Total Keseluruhan Barang & Nilai SKPD Terpilih
+        total_item_skpd = len(df_skpd_selected)
+        total_nilai_skpd = df_skpd_selected["Harga_Clean"].sum()
+        formatted_total_nilai_skpd = (
+            f"Rp {total_nilai_skpd:,.0f}".replace(",", ".")
+            if total_nilai_skpd > 0
+            else "Rp 0"
+        )
+
+        col_tot1, col_tot2 = st.columns(2)
+        with col_tot1:
+          st.metric(
+              label="📦 Total Keseluruhan Barang SKPD",
+              value=f"{total_item_skpd:,} Unit",
+          )
+        with col_tot2:
+          st.metric(
+              label="💰 Total Keseluruhan Nilai Aset SKPD",
+              value=formatted_total_nilai_skpd,
+          )
+
+        st.markdown("")  # Spasi pemisah
+
+        rekap_df = (
+            df_skpd_selected.groupby("Kategori_Jenis")
+            .agg(
+                Jumlah_Barang=("Kategori_Jenis", "count"),
+                Total_Nilai=("Harga_Clean", "sum"),
+            )
+            .reset_index()
+        )
+
+        kategori_standar = ["Alat Berat", "Mobil", "Pick Up", "Sepeda Motor"]
+        df_standar = pd.DataFrame({"Kategori_Jenis": kategori_standar})
+        rekap_df = (
+            pd.merge(df_standar, rekap_df, on="Kategori_Jenis", how="left")
+            .fillna(0)
+        )
+
+        rekap_df["Total_Nilai_Format"] = rekap_df["Total_Nilai"].apply(
+            lambda x: f"Rp {x:,.0f}".replace(",", ".") if x > 0 else "Rp 0"
+        )
+
+        cols_rekap = st.columns(len(kategori_standar))
+        for idx, row in rekap_df.iterrows():
+          with cols_rekap[idx]:
+            st.metric(
+                label=f"{row['Kategori_Jenis']}",
+                value=f"{int(row['Jumlah_Barang'])} Barang",
+                delta=row["Total_Nilai_Format"],
+                delta_color="off",
+            )
+      st.markdown("---")
+    # -----------------------------------------------------------------
+
     if pilih_skpd != "Semua SKPD":
-      active_df = active_df[active_df["SKPD_Nama"] == pilih_skpd]
+      if st.session_state.module == "tanah":
+        active_df = active_df[active_df["skpd"] == pilih_skpd]
+      else:
+        active_df = active_df[active_df["SKPD_Nama"] == pilih_skpd]
 
-  if st.session_state.module == "tanah":
-    search_query = st.text_input(
-        "🔍 Cari KIB A Tanah (Alamat, Keterangan, No. Sertifikat, dll)..."
-    )
-  elif st.session_state.module == "gedung":
-    search_query = st.text_input(
-        "🔍 Cari KIB C Gedung (Nama Barang, Kode Barang, Kondisi, dll)..."
-    )
-  else:
-    search_query = st.text_input(
-        "🔍 Cari Kendaraan (No. Polisi, Merk, No. Rangka, dll)..."
-    )
-
+  search_query = st.text_input("🔍 Cari Data Berdasarkan Kata Kunci...")
   if search_query:
-    mask_search = (
+    mask = (
         active_df.astype(str)
         .apply(
             lambda col: col.str.lower().str.contains(
@@ -857,31 +473,20 @@ elif st.session_state.page == "table":
         )
         .any(axis=1)
     )
-    active_df = active_df[mask_search]
+    active_df = active_df[mask]
 
   st.info(f"Menampilkan {len(active_df):,} baris data aset")
 
-  if "Harga_Clean" in active_df.columns:
+  if st.session_state.module == "kendaraan" and "Harga_Clean" in active_df.columns:
     total_nilai_aset = active_df["Harga_Clean"].sum()
     st.metric(
         "Total Keseluruhan Nilai Aset Terfilter",
         f"Rp {total_nilai_aset:,.0f}".replace(",", "."),
     )
 
-  columns_to_drop = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"]
-  filtered_active_df = active_df.copy()
-
-  display_df = filtered_active_df.drop(
-      columns=[c for c in columns_to_drop if c in filtered_active_df.columns],
-      errors="ignore",
+  display_df = active_df.drop(
+      columns=["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"], errors="ignore"
   ).reset_index(drop=True)
-
-  st.markdown(
-      "<p style='font-weight:600; color:#2d3748;'>💡 <i>Klik pada baris data"
-      " barang di bawah untuk melihat preview detail lengkap secara"
-      " eksklusif.</i></p>",
-      unsafe_allow_html=True,
-  )
 
   event = st.dataframe(
       display_df,
@@ -890,106 +495,13 @@ elif st.session_state.page == "table":
       on_select="rerun",
       selection_mode="single-row",
   )
-
   selected_rows = event.selection.rows if event and event.selection else []
   if selected_rows:
-    selected_iloc = selected_rows[0]
-    st.session_state.selected_original_index = filtered_active_df.index[
-        selected_iloc
+    st.session_state.selected_original_index = active_df.index[
+        selected_rows[0]
     ]
     st.session_state.page = "detail"
     st.rerun()
-
-  st.markdown("---")
-
-  if st.session_state.module == "kendaraan":
-    rekap_title = (
-        f"📊 Rekapitulasi Kategori Kendaraan & Nilai: {pilih_skpd}"
-        if pilih_skpd != "Semua SKPD"
-        else (
-            "📊 Rekapitulasi Keseluruhan Kategori Kendaraan & Nilai per SKPD"
-        )
-    )
-    st.markdown(f"#### {rekap_title}")
-
-    if not active_df.empty:
-      pivot_unit = active_df.pivot_table(
-          index="SKPD_Nama",
-          columns="Kategori_Jenis",
-          values=active_df.columns[0],
-          aggfunc="count",
-          fill_value=0,
-      )
-      pivot_nilai = active_df.pivot_table(
-          index="SKPD_Nama",
-          columns="Kategori_Jenis",
-          values="Harga_Clean",
-          aggfunc="sum",
-          fill_value=0,
-      )
-
-      combined_rekap = pd.DataFrame(index=pivot_unit.index)
-      for col in pivot_unit.columns:
-        combined_rekap[f"Unit - {col}"] = pivot_unit[col]
-        combined_rekap[f"Nilai (Rp) - {col}"] = pivot_nilai[col]
-
-      combined_rekap["Total Unit"] = pivot_unit.sum(axis=1)
-      combined_rekap["Total Nilai (Rp)"] = pivot_nilai.sum(axis=1)
-      combined_rekap = combined_rekap.reset_index()
-
-      for col in combined_rekap.columns:
-        if "Nilai" in col:
-          combined_rekap[col] = combined_rekap[col].apply(
-              lambda x: f"Rp {x:,.0f}".replace(",", ".")
-          )
-
-      st.dataframe(combined_rekap, use_container_width=True)
-
-  elif st.session_state.module == "tanah":
-    st.markdown(
-        "#### 📊 Ringkasan Jumlah Bidang Tanah & Total Nilai per SKPD"
-    )
-    if not active_df.empty and "SKPD_Nama" in active_df.columns:
-      summary_tanah = (
-          active_df.groupby("SKPD_Nama")
-          .agg(
-              Jumlah_Bidang=("SKPD_Nama", "count"),
-              Total_Nilai=("Harga_Clean", "sum"),
-          )
-          .reset_index()
-      )
-      summary_tanah.columns = [
-          "Nama SKPD / Dinas",
-          "Jumlah Bidang Tanah",
-          "Total Nilai (Rp)",
-      ]
-      summary_tanah["Total Nilai (Rp)"] = summary_tanah["Total Nilai (Rp)"].apply(
-          lambda x: f"Rp {x:,.0f}".replace(",", ".")
-      )
-      st.dataframe(summary_tanah, use_container_width=True)
-
-  else:
-    st.markdown(
-        "#### 📊 Ringkasan Jumlah Gedung & Bangunan serta Total Nilai per SKPD"
-    )
-    if not active_df.empty and "SKPD_Nama" in active_df.columns:
-      summary_gedung = (
-          active_df.groupby("SKPD_Nama")
-          .agg(
-              Jumlah_Gedung=("SKPD_Nama", "count"),
-              Total_Nilai=("Harga_Clean", "sum"),
-          )
-          .reset_index()
-      )
-      summary_gedung.columns = [
-          "Nama SKPD / Dinas",
-          "Jumlah Gedung",
-          "Total Nilai (Rp)",
-      ]
-      summary_gedung["Total Nilai (Rp)"] = summary_gedung[
-          "Total Nilai (Rp)"
-      ].apply(lambda x: f"Rp {x:,.0f}".replace(",", "."))
-      st.dataframe(summary_gedung, use_container_width=True)
 
 elif st.session_state.page == "detail":
   if st.session_state.module == "kendaraan":
@@ -1002,11 +514,9 @@ elif st.session_state.page == "detail":
     active_df = st.session_state.df_gedung_live
     table_bg_color = "975a16"
 
-  col_back_det, col_empty = st.columns([2, 5])
-  with col_back_det:
-    if st.button("⬅️ Kembali ke Tabel Utama"):
-      st.session_state.page = "table"
-      st.rerun()
+  if st.button("⬅️ Kembali ke Tabel Utama"):
+    st.session_state.page = "table"
+    st.rerun()
 
   st.markdown(
       f"<h3 style='color:#{table_bg_color}; font-weight:700;'>📋 Preview"
@@ -1015,26 +525,23 @@ elif st.session_state.page == "detail":
   )
 
   selected_idx = st.session_state.get("selected_original_index", None)
-
   if selected_idx is not None and selected_idx in active_df.index:
     row_full = active_df.loc[selected_idx]
-
     columns_to_drop = ["Harga_Clean", "Kategori_Jenis", "SKPD_Nama"]
     columns_list = [c for c in active_df.columns if c not in columns_to_drop]
 
     cleaned_values = []
     for col in columns_list:
       val = row_full[col]
-      if pd.isna(val):
-        cleaned_values.append("None")
+      if pd.isna(val) or str(val).lower() in ["nan", "none", ""]:
+        cleaned_values.append("-")
       elif isinstance(val, (int, float)):
-        if "harga" in col.lower():
+        if "harga" in col.lower() or "nilai" in col.lower():
           cleaned_values.append(f"{int(val):,}".replace(",", "."))
         else:
-          if val == int(val):
-            cleaned_values.append(str(int(val)))
-          else:
-            cleaned_values.append(str(val))
+          cleaned_values.append(
+              str(int(val)) if val == int(val) else str(val)
+          )
       else:
         cleaned_values.append(str(val))
 
@@ -1043,179 +550,53 @@ elif st.session_state.page == "detail":
         "Keterangan / Isi Data": cleaned_values,
     })
 
-    styled_preview = (
-        detail_df.style.set_table_styles([
-            {
-                "selector": "th",
-                "props": [
-                    ("background-color", f"#{table_bg_color}"),
-                    ("color", "white"),
-                    ("font-weight", "bold"),
-                    ("border", "1px solid black"),
-                    ("text-align", "center"),
-                ],
-            },
-            {
-                "selector": "td",
-                "props": [
-                    ("border", "1px solid #b0b0b0"),
-                    ("padding", "6px 10px"),
-                ],
-            },
-        ])
-        .set_properties(**{"text-align": "left"})
-        .hide(axis="index")
-    )
-
-    st.dataframe(styled_preview, use_container_width=True, height=500)
-
+    st.dataframe(detail_df, use_container_width=True, height=350)
     st.markdown("---")
 
-    # TAB MENU AKSI: Unduh Dokumen & Menu Edit Data Terpisah
     tab_unduh, tab_edit = st.tabs(
-        ["📥 Unduh Dokumen Detail", "✏️ Menu Edit Data Aset"]
+        ["📥 Unduh Dokumen Detail", "✏️ Menu Edit & Simpan ke Excel"]
     )
 
     with tab_unduh:
       col_e1, col_e2, col_e3 = st.columns(3)
-
       with col_e1:
-
-        def create_styled_vertical_excel(cols, vals, bg_hex):
-          card_df = pd.DataFrame(
-              {"Atribut / Kolom Data": cols, "Keterangan / Isi Data": vals}
-          )
-          output = BytesIO()
-          with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            card_df.to_excel(writer, index=False, sheet_name="Detail Aset")
-          output.seek(0)
-          wb = openpyxl.load_workbook(output)
-          ws = wb.active
-          thin_border = Border(
-              left=Side(style="thin", color="888888"),
-              right=Side(style="thin", color="888888"),
-              top=Side(style="thin", color="888888"),
-              bottom=Side(style="thin", color="888888"),
-          )
-          header_fill = PatternFill(
-              start_color=bg_hex, end_color=bg_hex, fill_type="solid"
-          )
-          header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-          fill_even = PatternFill(
-              start_color="F9FAFB", end_color="F9FAFB", fill_type="solid"
-          )
-
-          for col_idx in range(1, 3):
-            cell = ws.cell(row=1, column=col_idx)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(
-                horizontal="center", vertical="center", wrap_text=True
-            )
-
-          for row_idx in range(2, ws.max_row + 1):
-            is_even = row_idx % 2 == 0
-            for col_idx in range(1, 3):
-              cell = ws.cell(row=row_idx, column=col_idx)
-              cell.border = thin_border
-              cell.alignment = Alignment(vertical="center", wrap_text=True)
-              if is_even:
-                cell.fill = fill_even
-
-          ws.column_dimensions["A"].width = 30
-          ws.column_dimensions["B"].width = 50
-          final_output = BytesIO()
-          wb.save(final_output)
-          return final_output.getvalue()
-
-        excel_data = create_styled_vertical_excel(
-            columns_list, cleaned_values, table_bg_color
-        )
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+          detail_df.to_excel(writer, index=False, sheet_name="Detail Aset")
         st.download_button(
-            label="📊 Download Excel Bergaris",
-            data=excel_data,
+            label="📊 Download Excel",
+            data=output.getvalue(),
             file_name=f"Detail_Aset_{selected_idx+1}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-
       with col_e2:
-        csv_data = detail_df.to_csv(index=False).encode("utf-8")
         st.download_button(
-            label="📄 Download CSV Detail",
-            data=csv_data,
+            label="📄 Download CSV",
+            data=detail_df.to_csv(index=False).encode("utf-8"),
             file_name=f"Detail_Aset_{selected_idx+1}.csv",
             mime="text/csv",
         )
 
-      with col_e3:
-
-        def create_pdf_detail(cols, vals, module_type):
-          pdf = FPDF(orientation="P", unit="mm", format="A4")
-          pdf.add_page()
-          pdf.set_font("Arial", "B", 14)
-          if module_type == "kendaraan":
-            pdf.set_text_color(43, 108, 176)
-          elif module_type == "tanah":
-            pdf.set_text_color(39, 103, 73)
-          else:
-            pdf.set_text_color(151, 90, 22)
-          pdf.cell(0, 10, "DETAIL INFORMASI ASET PEMERINTAH DAERAH", 0, 1, "C")
-          pdf.ln(4)
-          pdf.set_font("Arial", "B", 10)
-          if module_type == "kendaraan":
-            pdf.set_fill_color(43, 108, 176)
-          elif module_type == "tanah":
-            pdf.set_fill_color(39, 103, 73)
-          else:
-            pdf.set_fill_color(151, 90, 22)
-          pdf.set_text_color(255, 255, 255)
-          pdf.cell(70, 7, "Atribut / Kolom Data", 1, 0, "C", True)
-          pdf.cell(120, 7, "Keterangan / Isi Data", 1, 1, "C", True)
-          pdf.set_font("Arial", "", 9)
-          pdf.set_text_color(0, 0, 0)
-          fill = False
-          for col, val in zip(cols, vals):
-            if fill:
-              pdf.set_fill_color(240, 244, 248)
-            else:
-              pdf.set_temp = pdf.set_fill_color(255, 255, 255)
-            pdf.cell(70, 6, str(col or ""), 1, 0, "L", True)
-            pdf.cell(120, 6, str(val or ""), 1, 1, "L", True)
-            fill = not fill
-          output_pdf = pdf.output(dest="S")
-          if isinstance(output_pdf, (bytes, bytearray)):
-            return bytes(output_pdf)
-          else:
-            return output_pdf.encode("latin1")
-
-        pdf_bytes = create_pdf_detail(
-            columns_list, cleaned_values, st.session_state.module
-        )
-        st.download_button(
-            label="📑 Download PDF Bergaris",
-            data=pdf_bytes,
-            file_name=f"Detail_Aset_{selected_idx+1}.pdf",
-            mime="application/pdf",
-        )
-
     with tab_edit:
       st.markdown(
-          "<p style='color:#2d3748;'>Silakan perbarui informasi atribut data"
-          " aset di bawah ini. Perubahan akan langsung tersimpan ke dalam"
-          " database memori aplikasi.</p>",
+          "<p style='color:#2d3748;'>Perbarui atribut di bawah ini. Tombol"
+          " simpan akan langsung memperbarui database memori sekaligus"
+          " menuliskan perubahan secara permanen ke file Excel asli.</p>",
           unsafe_allow_html=True,
       )
 
       with st.form(key="form_edit_aset"):
         updated_inputs = {}
-        # Membagi form ke dalam 2 kolom agar rapi
-        form_col1, form_col2 = st.columns(2)
-
+        fcol1, fcol2 = st.columns(2)
         for i, col_name in enumerate(columns_list):
           current_val = row_full[col_name]
-          val_str = "" if pd.isna(current_val) else str(current_val)
-
-          target_col = form_col1 if i % 2 == 0 else form_col2
+          val_str = (
+              ""
+              if pd.isna(current_val)
+              or str(current_val).lower() in ["nan", "none", ""]
+              else str(current_val)
+          )
+          target_col = fcol1 if i % 2 == 0 else fcol2
           with target_col:
             updated_inputs[col_name] = st.text_input(
                 label=col_name,
@@ -1223,15 +604,35 @@ elif st.session_state.page == "detail":
                 key=f"input_edit_{selected_idx}_{col_name}",
             )
 
-        submit_edit = st.form_submit_button("💾 Simpan Perubahan Data")
+        submit_edit = st.form_submit_button(
+            "💾 Simpan Perubahan ke Database Excel"
+        )
 
         if submit_edit:
-          # Perbarui data langsung pada active_df live di session_state
           for col_name, new_val in updated_inputs.items():
-            active_df.at[selected_idx, col_name] = new_val
+            original_dtype = active_df[col_name].dtype
+            cleaned_input_val = new_val.strip()
+            try:
+              if pd.api.types.is_integer_dtype(original_dtype):
+                converted_val = int(
+                    pd.to_numeric(cleaned_input_val, errors="coerce") or 0
+                )
+              elif pd.api.types.is_float_dtype(original_dtype):
+                converted_val = float(
+                    pd.to_numeric(cleaned_input_val, errors="coerce") or 0.0
+                )
+              else:
+                converted_val = (
+                    "" if cleaned_input_val.lower() == "none" else cleaned_input_val
+                )
+              active_df.at[selected_idx, col_name] = converted_val
+            except:
+              active_df.at[selected_idx, col_name] = cleaned_input_val
 
-          # Update juga nilai bersih (Harga Clean) jika kolom harga diubah
-          if "Harga_Clean" in active_df.columns:
+          if (
+              st.session_state.module == "kendaraan"
+              and "Harga_Clean" in active_df.columns
+          ):
             harga_col = next(
                 (
                     c
@@ -1243,7 +644,7 @@ elif st.session_state.page == "detail":
                 None,
             )
             if harga_col and harga_col in updated_inputs:
-              cleaned_harga_val = (
+              cleaned_harga = (
                   pd.to_numeric(
                       pd.Series([updated_inputs[harga_col]])
                       .astype(str)
@@ -1252,12 +653,38 @@ elif st.session_state.page == "detail":
                   ).fillna(0)
                   .iloc[0]
               )
-              active_df.at[selected_idx, "Harga_Clean"] = cleaned_harga_val
+              active_df.at[selected_idx, "Harga_Clean"] = cleaned_harga
 
-          st.success(
-              "✅ Data aset berhasil diperbarui! Silakan kembali ke tabel"
-              " utama untuk melihat perubahan."
-          )
+          if st.session_state.module == "kendaraan":
+            st.session_state.df_kendaraan_live = active_df
+          elif st.session_state.module == "tanah":
+            st.session_state.df_tanah_live = active_df
+          else:
+            st.session_state.df_gedung_live = active_df
+
+          excel_path = get_excel_filename()
+          try:
+            with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
+              st.session_state.df_kendaraan_live.to_excel(
+                  writer, sheet_name="KENDARAAN DINAS", index=False
+              )
+              st.session_state.df_tanah_live.to_excel(
+                  writer, sheet_name="KIB A Tanah", index=False
+              )
+              st.session_state.df_gedung_live.to_excel(
+                  writer,
+                  sheet_name="KIB C - Gedung dan Bangunan",
+                  index=False,
+              )
+            st.success(
+                "✅ Perubahan berhasil disimpan ke memori DAN langsung"
+                " tersimpan permanen di file Excel fisik!"
+            )
+          except Exception as write_err:
+            st.warning(
+                f"⚠️ Data berhasil diperbarui di memori aplikasi, namun penulisan file fisik mengalami kendala: {write_err}"
+            )
+
           st.rerun()
   else:
     st.warning("Data item aset tidak ditemukan.")
